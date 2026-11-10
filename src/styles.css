@@ -619,6 +619,9 @@ select.input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.table-head .col-kind {
+  text-align: center;
+}
 
 .table-scroll {
   flex: 1;
@@ -673,7 +676,7 @@ select.input {
   text-align: center;
 }
 .row .kind {
-  justify-self: start;
+  justify-self: center;
   max-width: 64px;
   padding: 0 6px;
   height: 17px;
