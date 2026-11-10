@@ -70,12 +70,43 @@ function isSubsequence(a: string[], b: string[]): boolean {
   return true;
 }
 
+/** 拆出名字主体和扩展名，规则与后端一致：隐藏文件、末尾点都视为没有扩展名 */
+function splitExtChars(name: string[]): [string[], string[]] {
+  let dot = -1;
+  for (let i = name.length - 1; i >= 0; i -= 1) {
+    if (name[i] === ".") {
+      dot = i;
+      break;
+    }
+  }
+  if (dot <= 0 || dot === name.length - 1) return [name, []];
+  return [name.slice(0, dot), name.slice(dot)];
+}
+
+function indexOfSeq(hay: string[], needle: string[]): number {
+  if (needle.length === 0) return -1;
+  for (let i = 0; i + needle.length <= hay.length; i += 1) {
+    let hit = true;
+    for (let j = 0; j < needle.length; j += 1) {
+      if (hay[i + j] !== needle[j]) {
+        hit = false;
+        break;
+      }
+    }
+    if (hit) return i;
+  }
+  return -1;
+}
+
 /**
  * 算出新名里真正变化的区间，最多两段。
  *
- * 只算「公共前缀 + 公共后缀」会给出一整段：前缀和后缀同时改时，
- * 中间那段原样保留的文字也被框进高亮里，看起来整个名字都变了。
- * 所以再在中间段里找一次原有的名字，把它挖掉，拆成左右两段。
+ * 首选判断「名字主体整段还在不在」：原名的主体（不含扩展名）在新名里原样出现时，
+ * 只有它前后新增的文字该上色，中间那段原名字符保持原样。
+ * 主体被改掉了，才退回「公共前缀 + 公共后缀」的近似算法。
+ *
+ * 不能只算公共前后缀：`IMG_001.png → IMGIMG_001_001.png` 时，
+ * 公共后缀会一路吃到中间，把差异挤到名字正中，前缀反而看不出变化。
  */
 function diffMarks(a: string, b: string): [number, number][] {
   const ac = Array.from(a);
@@ -85,6 +116,29 @@ function diffMarks(a: string, b: string): [number, number][] {
   // 硬标一段会把保留下来的文字误标成新内容，所以干脆不标。
   if (isSubsequence(ac, bc)) return [];
 
+  const [aStem, aExt] = splitExtChars(ac);
+  const [bStem, bExt] = splitExtChars(bc);
+  const sameExt = aExt.join("") === bExt.join("");
+
+  // 1. 原名的名字主体原样出现在新名里 → 只标它前后新增的部分
+  const at = indexOfSeq(bStem, aStem);
+  if (aStem.length > 0 && at >= 0) {
+    const marks: [number, number][] = [];
+    if (at > 0) marks.push([0, at]);
+
+    const tail = at + aStem.length;
+    // 扩展名也变了就一路标到结尾，让扩展名的改动也可见
+    const end = sameExt ? bStem.length : bc.length;
+    if (end > tail) {
+      const last = marks[marks.length - 1];
+      if (last && last[1] === tail) last[1] = end;
+      else marks.push([tail, end]);
+    }
+
+    if (marks.length > 0) return marks;
+  }
+
+  // 2. 退化：公共前缀 + 公共后缀
   let p = 0;
   const maxP = Math.min(ac.length, bc.length);
   while (p < maxP && ac[p] === bc[p]) p += 1;
@@ -95,30 +149,7 @@ function diffMarks(a: string, b: string): [number, number][] {
 
   const bStart = p;
   const bEnd = bc.length - s;
-  if (bEnd <= bStart) return [];
-
-  const aMid = ac.slice(p, ac.length - s);
-  if (aMid.length > 0 && bEnd - bStart > aMid.length) {
-    const hay = bc.slice(bStart, bEnd);
-    for (let i = 0; i + aMid.length <= hay.length; i += 1) {
-      let hit = true;
-      for (let j = 0; j < aMid.length; j += 1) {
-        if (hay[i + j] !== aMid[j]) {
-          hit = false;
-          break;
-        }
-      }
-      if (!hit) continue;
-
-      const marks: [number, number][] = [];
-      if (i > 0) marks.push([bStart, bStart + i]);
-      const tailStart = bStart + i + aMid.length;
-      if (tailStart < bEnd) marks.push([tailStart, bEnd]);
-      return marks.length > 0 ? marks : [[bStart, bEnd]];
-    }
-  }
-
-  return [[bStart, bEnd]];
+  return bEnd > bStart ? [[bStart, bEnd]] : [];
 }
 
 function Marked({ text, marks }: { text: string; marks: [number, number][] }) {
