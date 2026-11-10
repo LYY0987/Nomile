@@ -364,7 +364,7 @@ export function PreviewTable() {
         <span />
         <span className="col">新文件名</span>
         <span className="col col-kind">类型</span>
-        <span className="col">状态</span>
+        <span className="col col-status">状态</span>
       </div>
 
       {entries.length === 0 ? (

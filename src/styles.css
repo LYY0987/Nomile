@@ -620,7 +620,8 @@ select.input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.table-head .col-kind {
+.table-head .col-kind,
+.table-head .col-status {
   text-align: center;
 }
 
@@ -699,6 +700,7 @@ select.input {
   display: flex;
   gap: 4px;
   align-items: center;
+  justify-content: center;
   font-size: 11px;
   overflow: hidden;
 }
