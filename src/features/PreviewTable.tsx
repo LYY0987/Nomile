@@ -335,7 +335,7 @@ export function PreviewTable() {
                     ) : item?.changed ? (
                       <span className="tag ok">待执行</span>
                     ) : (
-                      <span className="tag mute">无需改动</span>
+                      <span className="tag mute">未改动</span>
                     )}
                   </span>
                 </div>
