@@ -377,9 +377,13 @@ export function PreviewTable() {
           </select>
         </label>
 
-        <button className="btn" onClick={() => void undoLast()}>
+        <button
+          className="btn"
+          onClick={() => void undoLast()}
+          title="撤销本次打开里最近一次改名操作"
+        >
           <Undo2 />
-          撤销上次
+          撤销修改
         </button>
         <button
           className="btn primary"
