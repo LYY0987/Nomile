@@ -430,7 +430,7 @@ export function PreviewTable() {
                   </span>
                   <span
                     className="kind"
-                    style={{ display: "grid", placeItems: "center" }}
+                    style={{ display: "block", width: "100%", textAlign: "center" }}
                   >
                     <span className="kind-tag" data-kind={entry.kind}>
                       {KIND_LABEL[entry.kind] ?? entry.kind}
