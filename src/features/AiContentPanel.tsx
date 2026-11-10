@@ -68,7 +68,7 @@ export function AiContentPanel() {
     <div className="ai-scroll">
       {!sessionId && (
         <div className="ai-hint">
-          先在上方载入一批文件，按内容命名只处理选中的文本文件。
+          先在上方载入一批文件，按内容命名只处理选中的文本、PDF、DOCX、PPTX 文件。
         </div>
       )}
 
@@ -113,7 +113,7 @@ export function AiContentPanel() {
             允许读取选中文件的文本内容（最多 30 个，每个约 6KB）
           </label>
           <div className="ai-settings-hint">
-            内容只用于本次请求；图片、音视频、Office 文档不会读取。AI 只返回文件名，不会修改文件。
+            支持文本、PDF、DOCX、PPTX；图片、音视频、XLSX 表格不会读取。内容只用于本次请求，AI 只返回文件名，不会修改文件。
           </div>
         </div>
 

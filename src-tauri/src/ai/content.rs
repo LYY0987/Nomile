@@ -1,7 +1,10 @@
-//! 按内容命名时读取文本摘要。只读常见文本文件，限制大小，避免把大文件或二进制塞进模型。
+//! 按内容命名时读取内容摘要。
+//!
+//! 文本文件直接读；PDF / DOCX / PPTX 提取文字后截断。
+//! 统一限制大小，避免把大文件或二进制塞进模型。
 
 use std::fs::File;
-use std::io::{Read, Take};
+use std::io::Read;
 use std::path::Path;
 
 const TEXT_EXTS: &[&str] = &[
@@ -12,6 +15,9 @@ const TEXT_EXTS: &[&str] = &[
 
 /// 单文件最多读取的原始字节数
 const MAX_BYTES: u64 = 256 * 1024;
+const MAX_PDF_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_ZIP_BYTES: u64 = 50 * 1024 * 1024;
+const MAX_ZIP_ENTRY_BYTES: u64 = 5 * 1024 * 1024;
 /// 送给模型的摘要字符数上限
 pub const MAX_CHARS: usize = 1500;
 
@@ -21,31 +27,30 @@ pub struct Snippet {
 }
 
 pub fn supports(ext: &str) -> bool {
-    TEXT_EXTS.contains(&ext.to_ascii_lowercase().as_str())
+    let ext = ext.to_ascii_lowercase();
+    TEXT_EXTS.contains(&ext.as_str()) || matches!(ext.as_str(), "pdf" | "docx" | "pptx")
 }
 
-/// 读取文本摘要。返回 None 表示不适合读内容（过大、二进制、空文件）。
+/// 读取内容摘要。返回 None 表示不适合读内容（过大、二进制、空文件）。
 pub fn read_snippet(path: &Path, max_chars: usize) -> Result<Option<Snippet>, String> {
-    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
-    if meta.len() == 0 || meta.len() > MAX_BYTES {
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let text = match ext.as_str() {
+        "pdf" => read_pdf(path)?,
+        "docx" => read_zip_text(path, |name| name == "word/document.xml")?,
+        "pptx" => read_zip_text(path, |name| {
+            name.starts_with("ppt/slides/slide") && name.ends_with(".xml")
+        })?,
+        _ if TEXT_EXTS.contains(&ext.as_str()) => read_plain(path)?,
+        _ => None,
+    };
+
+    let Some(text) = text else {
         return Ok(None);
-    }
-
-    let file = File::open(path).map_err(|e| e.to_string())?;
-    let mut reader: Take<File> = file.take(MAX_BYTES);
-    let mut bytes = Vec::new();
-    reader
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-
-    // 含 NUL 的按二进制处理，不读内容
-    if bytes.contains(&0) {
-        return Ok(None);
-    }
-
-    let text = match String::from_utf8(bytes.clone()) {
-        Ok(text) => text,
-        Err(_) => String::from_utf8_lossy(&bytes).to_string(),
     };
 
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -61,9 +66,109 @@ pub fn read_snippet(path: &Path, max_chars: usize) -> Result<Option<Snippet>, St
     }))
 }
 
+fn file_size(path: &Path) -> Result<u64, String> {
+    std::fs::metadata(path)
+        .map(|meta| meta.len())
+        .map_err(|e| e.to_string())
+}
+
+fn read_plain(path: &Path) -> Result<Option<String>, String> {
+    let size = file_size(path)?;
+    if size == 0 || size > MAX_BYTES {
+        return Ok(None);
+    }
+
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    file.take(MAX_BYTES)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+
+    // 含 NUL 的按二进制处理，不读内容
+    if bytes.contains(&0) {
+        return Ok(None);
+    }
+
+    Ok(Some(String::from_utf8_lossy(&bytes).to_string()))
+}
+
+fn read_pdf(path: &Path) -> Result<Option<String>, String> {
+    let size = file_size(path)?;
+    if size == 0 || size > MAX_PDF_BYTES {
+        return Ok(None);
+    }
+    pdf_extract::extract_text(path)
+        .map(Some)
+        .map_err(|e| format!("PDF 解析失败：{e}"))
+}
+
+fn read_zip_text<F>(path: &Path, matches: F) -> Result<Option<String>, String>
+where
+    F: Fn(&str) -> bool,
+{
+    let size = file_size(path)?;
+    if size == 0 || size > MAX_ZIP_BYTES {
+        return Ok(None);
+    }
+
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("压缩包解析失败：{e}"))?;
+    let mut out = String::new();
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|e| e.to_string())?;
+        if !matches(entry.name()) || entry.size() > MAX_ZIP_ENTRY_BYTES {
+            continue;
+        }
+        let mut xml = String::new();
+        if entry.read_to_string(&mut xml).is_err() {
+            continue;
+        }
+        let text = strip_xml_text(&xml);
+        if !text.trim().is_empty() {
+            out.push_str(&text);
+            out.push(' ');
+        }
+    }
+
+    Ok(if out.trim().is_empty() {
+        None
+    } else {
+        Some(out)
+    })
+}
+
+/// 去掉 XML 标签，只留文本节点；同时还原常见实体。
+fn strip_xml_text(xml: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in xml.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                out.push(' ');
+            }
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    decode_entities(&out)
+}
+
+fn decode_entities(text: &str) -> String {
+    text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn reads_text_snippet() {
@@ -97,11 +202,56 @@ mod tests {
         assert!(read_snippet(&empty, 100).unwrap().is_none());
     }
 
+    fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
+        let file = File::create(path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        for (name, data) in entries {
+            zip.start_file(*name, options).unwrap();
+            zip.write_all(data).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
     #[test]
-    fn supports_common_text_extensions() {
+    fn extracts_docx_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.docx");
+        write_zip(
+            &path,
+            &[(
+                "word/document.xml",
+                b"<w:document><w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p><w:p><w:r><w:t>world</w:t></w:r></w:p></w:body></w:document>",
+            )],
+        );
+        let snippet = read_snippet(&path, 100).unwrap().unwrap();
+        assert_eq!(snippet.text, "Hello world");
+    }
+
+    #[test]
+    fn extracts_pptx_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.pptx");
+        write_zip(
+            &path,
+            &[(
+                "ppt/slides/slide1.xml",
+                b"<p:sld><p:cSld><a:t>Slide</a:t><a:t>title</a:t></p:cSld></p:sld>",
+            )],
+        );
+        let snippet = read_snippet(&path, 100).unwrap().unwrap();
+        assert_eq!(snippet.text, "Slide title");
+    }
+
+    #[test]
+    fn supports_common_formats() {
         assert!(supports("md"));
         assert!(supports("TXT"));
+        assert!(supports("pdf"));
+        assert!(supports("docx"));
+        assert!(supports("pptx"));
         assert!(!supports("jpg"));
-        assert!(!supports("docx"));
+        assert!(!supports("doc"));
+        assert!(!supports("xlsx"));
     }
 }

@@ -34,6 +34,7 @@ export const META_LABEL: Record<AiMetaKey, string> = {
   duration: "时长",
   width: "宽度",
   height: "高度",
+  shot: "拍摄时间",
 };
 
 export const SEGMENT_LABEL: Record<AiSegment["type"], string> = {

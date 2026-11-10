@@ -502,6 +502,7 @@ pub enum AiMetaKey {
     Duration,
     Width,
     Height,
+    Shot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

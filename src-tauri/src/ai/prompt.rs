@@ -53,7 +53,7 @@ segments 按顺序直接拼接成新文件名的主体（不含扩展名）：
 - {"type":"field","field":"stem|parent|size|index|total","format":"","fallback":""}
 - {"type":"sequence","start":1,"step":1,"pad":3}
 - {"type":"date","source":"modified|created|now|shot","format":"yyyyMMdd","fallbackSource":"modified","fallback":""}
-- {"type":"meta","key":"camera|make|model|lens|title|artist|album|track|duration|width|height","format":"","fallback":""}
+- {"type":"meta","key":"camera|make|model|lens|title|artist|album|track|duration|width|height|shot","format":"","fallback":""}
 - {"type":"extract","pattern":"正则","group":1,"fallback":""}
 - {"type":"condition","when":{...},"then":[...],"otherwise":[...]}
 - {"type":"random","len":6}

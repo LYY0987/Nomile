@@ -320,6 +320,7 @@ fn meta_token(key: AiMetaKey, format: &str) -> String {
         }
         AiMetaKey::Width => "width".into(),
         AiMetaKey::Height => "height".into(),
+        AiMetaKey::Shot => "shot".into(),
     }
 }
 
@@ -374,6 +375,7 @@ fn meta_present(entry: &FileEntry, key: AiMetaKey) -> bool {
         AiMetaKey::Duration => meta.duration.is_some(),
         AiMetaKey::Width => meta.width.is_some(),
         AiMetaKey::Height => meta.height.is_some(),
+        AiMetaKey::Shot => meta.shot.is_some(),
     }
 }
 
@@ -698,6 +700,26 @@ mod tests {
             vec![],
         );
         assert_eq!(apply(&ctx(&e, 0), &s).unwrap().full(), "band-song.mp3");
+    }
+
+    #[test]
+    fn shot_meta_key_renders() {
+        let mut e = entry("a.jpg");
+        e.meta = Some(MediaMeta {
+            shot: Some(1_700_000_000_000),
+            ..Default::default()
+        });
+        let s = spec(
+            vec![AiSegment::Meta {
+                key: AiMetaKey::Shot,
+                format: "yyyy".into(),
+                fallback: String::new(),
+            }],
+            vec![],
+        );
+        let out = apply(&ctx(&e, 0), &s).unwrap();
+        assert!(out.stem.starts_with("2023"), "got {}", out.stem);
+        assert!(needs_meta(&s));
     }
 
     #[test]

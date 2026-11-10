@@ -374,7 +374,8 @@ export type AiMetaKey =
   | "track"
   | "duration"
   | "width"
-  | "height";
+  | "height"
+  | "shot";
 export type AiExtMode = "keep" | "lower" | "upper" | "set";
 export type AiEmpty = "keepOriginal" | "empty";
 

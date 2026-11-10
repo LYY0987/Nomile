@@ -487,7 +487,7 @@ fn collect_docs(
         if !content::supports(&ext) {
             skipped.push(AiMapSkipped {
                 name,
-                reason: "不是文本文件".into(),
+                reason: "不是可读取的文本 / PDF / Office 文件".into(),
             });
             continue;
         }

@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
+  AiCondition,
   AiDateSource,
   AiField,
   AiMetaKey,
@@ -13,6 +14,7 @@ import type {
   SpaceMode,
 } from "../lib/types";
 import {
+  META_LABEL,
   SEGMENT_LABEL,
   TRANSFORM_LABEL,
   conditionLabel,
@@ -27,8 +29,27 @@ const SEGMENT_TYPES: AiSegment["type"][] = [
   "date",
   "meta",
   "extract",
+  "condition",
   "random",
 ];
+
+const CONDITION_TYPES: AiCondition["type"][] = [
+  "extIn",
+  "extNotIn",
+  "metaPresent",
+  "nameMatches",
+  "isDir",
+  "sizeRange",
+];
+
+const CONDITION_LABEL: Record<AiCondition["type"], string> = {
+  extIn: "扩展名属于",
+  extNotIn: "扩展名不属于",
+  metaPresent: "有元数据",
+  nameMatches: "名称匹配",
+  isDir: "是否文件夹",
+  sizeRange: "大小范围",
+};
 
 const TRANSFORM_TYPES: AiTransform["type"][] = [
   "replace",
@@ -57,6 +78,7 @@ const META_OPTIONS: AiMetaKey[] = [
   "duration",
   "width",
   "height",
+  "shot",
 ];
 
 function cloneSpec(spec: AiSpec): AiSpec {
@@ -88,11 +110,35 @@ function makeSegment(type: AiSegment["type"]): AiSegment {
     case "condition":
       return {
         type: "condition",
-        when: { type: "extIn", values: [] },
+        when: makeCondition("extIn"),
         then: [],
         otherwise: [],
       };
   }
+}
+
+function makeCondition(type: AiCondition["type"]): AiCondition {
+  switch (type) {
+    case "extIn":
+      return { type: "extIn", values: [] };
+    case "extNotIn":
+      return { type: "extNotIn", values: [] };
+    case "metaPresent":
+      return { type: "metaPresent", key: "camera" };
+    case "nameMatches":
+      return { type: "nameMatches", pattern: "" };
+    case "isDir":
+      return { type: "isDir", value: true };
+    case "sizeRange":
+      return { type: "sizeRange", min: null, max: null };
+  }
+}
+
+function parseExtList(value: string): string[] {
+  return value
+    .split(/[,，、\s]+/)
+    .map((item) => item.trim().replace(/^\./, ""))
+    .filter(Boolean);
 }
 
 function makeTransform(type: AiTransform["type"]): AiTransform {
@@ -175,7 +221,6 @@ export function AiSpecEditor({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<AiSpec>(() => cloneSpec(spec));
-  const [newSegment, setNewSegment] = useState<AiSegment["type"]>("literal");
   const [newTransform, setNewTransform] =
     useState<AiTransform["type"]>("replace");
 
@@ -256,56 +301,12 @@ export function AiSpecEditor({
 
           <div className="spec-section">
             <div className="spec-section-title">命名结构</div>
-            {draft.segments.length === 0 && (
-              <div className="spec-empty">还没有命名段，新文件名会保持原名。</div>
-            )}
-            {draft.segments.map((segment, index) => (
-              <SegmentCard
-                key={index}
-                segment={segment}
-                index={index}
-                total={draft.segments.length}
-                onChange={(next) =>
-                  patch({
-                    segments: draft.segments.map((item, i) =>
-                      i === index ? next : item
-                    ),
-                  })
-                }
-                onMove={(delta) =>
-                  patch({ segments: moveItem(draft.segments, index, delta) })
-                }
-                onRemove={() =>
-                  patch({
-                    segments: draft.segments.filter((_, i) => i !== index),
-                  })
-                }
-              />
-            ))}
-            <div className="spec-actions">
-              <select
-                className="input small"
-                value={newSegment}
-                onChange={(event) =>
-                  setNewSegment(event.currentTarget.value as AiSegment["type"])
-                }
-              >
-                {SEGMENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {SEGMENT_LABEL[type]}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn small"
-                onClick={() =>
-                  patch({ segments: [...draft.segments, makeSegment(newSegment)] })
-                }
-              >
-                <Plus />
-                添加段
-              </button>
-            </div>
+            <SegmentListEditor
+              segments={draft.segments}
+              onChange={(segments) => patch({ segments })}
+              depth={0}
+              allowCondition
+            />
           </div>
 
           <div className="spec-section">
@@ -393,10 +394,236 @@ export function AiSpecEditor({
   );
 }
 
+function SegmentListEditor({
+  segments,
+  onChange,
+  depth,
+  allowCondition,
+}: {
+  segments: AiSegment[];
+  onChange: (segments: AiSegment[]) => void;
+  depth: number;
+  allowCondition: boolean;
+}) {
+  const [newType, setNewType] = useState<AiSegment["type"]>("literal");
+  const types = allowCondition
+    ? SEGMENT_TYPES
+    : SEGMENT_TYPES.filter((type) => type !== "condition");
+
+  return (
+    <>
+      {segments.length === 0 && (
+        <div className="spec-empty">还没有命名段。</div>
+      )}
+      {segments.map((segment, index) => (
+        <SegmentCard
+          key={index}
+          segment={segment}
+          index={index}
+          total={segments.length}
+          depth={depth}
+          onChange={(next) =>
+            onChange(segments.map((item, i) => (i === index ? next : item)))
+          }
+          onMove={(delta) => onChange(moveItem(segments, index, delta))}
+          onRemove={() => onChange(segments.filter((_, i) => i !== index))}
+        />
+      ))}
+      <div className="spec-actions">
+        <select
+          className="input small"
+          value={newType}
+          onChange={(event) =>
+            setNewType(event.currentTarget.value as AiSegment["type"])
+          }
+        >
+          {types.map((type) => (
+            <option key={type} value={type}>
+              {SEGMENT_LABEL[type]}
+            </option>
+          ))}
+        </select>
+        <button
+          className="btn small"
+          onClick={() => onChange([...segments, makeSegment(newType)])}
+        >
+          <Plus />
+          添加段
+        </button>
+      </div>
+    </>
+  );
+}
+
+function ConditionEditor({
+  condition,
+  then,
+  otherwise,
+  depth,
+  onChange,
+}: {
+  condition: AiCondition;
+  then: AiSegment[];
+  otherwise: AiSegment[];
+  depth: number;
+  onChange: (
+    when: AiCondition,
+    then: AiSegment[],
+    otherwise: AiSegment[]
+  ) => void;
+}) {
+  const patch = (next: AiCondition) => onChange(next, then, otherwise);
+
+  return (
+    <div className="spec-cond-edit">
+      <Row label="条件">
+        <select
+          className="input small"
+          value={condition.type}
+          onChange={(event) =>
+            onChange(
+              makeCondition(event.currentTarget.value as AiCondition["type"]),
+              then,
+              otherwise
+            )
+          }
+        >
+          {CONDITION_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {CONDITION_LABEL[type]}
+            </option>
+          ))}
+        </select>
+      </Row>
+
+      {(condition.type === "extIn" || condition.type === "extNotIn") && (
+        <Row label="扩展名">
+          <input
+            className="input small mono"
+            value={condition.values.join(", ")}
+            placeholder="jpg, png，留空表示不限制"
+            onChange={(event) =>
+              patch({ ...condition, values: parseExtList(event.currentTarget.value) })
+            }
+          />
+        </Row>
+      )}
+
+      {condition.type === "metaPresent" && (
+        <Row label="元数据">
+          <select
+            className="input small"
+            value={condition.key}
+            onChange={(event) =>
+              patch({
+                ...condition,
+                key: event.currentTarget.value as AiMetaKey,
+              })
+            }
+          >
+            {META_OPTIONS.map((key) => (
+              <option key={key} value={key}>
+                {META_LABEL[key]}
+              </option>
+            ))}
+          </select>
+        </Row>
+      )}
+
+      {condition.type === "nameMatches" && (
+        <Row label="正则">
+          <input
+            className="input small mono"
+            value={condition.pattern}
+            placeholder="如 ^IMG_"
+            onChange={(event) =>
+              patch({ ...condition, pattern: event.currentTarget.value })
+            }
+          />
+        </Row>
+      )}
+
+      {condition.type === "isDir" && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={condition.value}
+            onChange={(event) =>
+              patch({ ...condition, value: event.currentTarget.checked })
+            }
+          />
+          是文件夹
+        </label>
+      )}
+
+      {condition.type === "sizeRange" && (
+        <Row label="大小">
+          <input
+            className="input small num"
+            type="number"
+            value={condition.min ?? ""}
+            placeholder="最小"
+            onChange={(event) =>
+              patch({
+                ...condition,
+                min:
+                  event.currentTarget.value === ""
+                    ? null
+                    : Number(event.currentTarget.value),
+              })
+            }
+          />
+          <span className="label">到</span>
+          <input
+            className="input small num"
+            type="number"
+            value={condition.max ?? ""}
+            placeholder="最大"
+            onChange={(event) =>
+              patch({
+                ...condition,
+                max:
+                  event.currentTarget.value === ""
+                    ? null
+                    : Number(event.currentTarget.value),
+              })
+            }
+          />
+        </Row>
+      )}
+
+      <div className="spec-cond-branch">
+        <span className="spec-cond-key">则</span>
+        <div className="spec-cond-list">
+          <SegmentListEditor
+            segments={then}
+            onChange={(next) => onChange(condition, next, otherwise)}
+            depth={depth + 1}
+            allowCondition={false}
+          />
+        </div>
+      </div>
+
+      <div className="spec-cond-branch">
+        <span className="spec-cond-key">否则</span>
+        <div className="spec-cond-list">
+          <SegmentListEditor
+            segments={otherwise}
+            onChange={(next) => onChange(condition, then, next)}
+            depth={depth + 1}
+            allowCondition={false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SegmentCard({
   segment,
   index,
   total,
+  depth,
   onChange,
   onMove,
   onRemove,
@@ -404,6 +631,7 @@ function SegmentCard({
   segment: AiSegment;
   index: number;
   total: number;
+  depth: number;
   onChange: (segment: AiSegment) => void;
   onMove: (delta: number) => void;
   onRemove: () => void;
@@ -609,37 +837,25 @@ function SegmentCard({
               >
                 {META_OPTIONS.map((key) => (
                   <option key={key} value={key}>
-                    {key === "camera"
-                      ? "相机"
-                      : key === "make"
-                        ? "厂商"
-                        : key === "model"
-                          ? "型号"
-                          : key === "lens"
-                            ? "镜头"
-                            : key === "title"
-                              ? "标题"
-                              : key === "artist"
-                                ? "艺术家"
-                                : key === "album"
-                                  ? "专辑"
-                                  : key === "track"
-                                    ? "曲目"
-                                    : key === "duration"
-                                      ? "时长"
-                                      : key === "width"
-                                        ? "宽度"
-                                        : "高度"}
+                    {META_LABEL[key]}
                   </option>
                 ))}
               </select>
             </Row>
-            {(segment.key === "track" || segment.key === "duration") && (
+            {(segment.key === "track" ||
+              segment.key === "duration" ||
+              segment.key === "shot") && (
               <Row label="格式">
                 <input
                   className="input small mono"
                   value={segment.format ?? ""}
-                  placeholder={segment.key === "track" ? "2" : "mmss"}
+                  placeholder={
+                    segment.key === "track"
+                      ? "2"
+                      : segment.key === "duration"
+                        ? "mmss"
+                        : "yyyyMMdd"
+                  }
                   onChange={(event) =>
                     patch({ format: event.currentTarget.value })
                   }
@@ -711,22 +927,36 @@ function SegmentCard({
           </Row>
         )}
 
-        {segment.type === "condition" && (
-          <div className="spec-cond">
-            <div className="spec-cond-row">
-              <span className="spec-cond-key">当</span>
-              {conditionLabel(segment.when)}
+        {segment.type === "condition" &&
+          (depth > 0 ? (
+            <div className="spec-cond">
+              <div className="spec-cond-row">
+                <span className="spec-cond-key">当</span>
+                {conditionLabel(segment.when)}
+              </div>
+              <div className="spec-cond-row">
+                <span className="spec-cond-key">则</span>
+                {segment.then.map(segmentLabel).join(" + ") || "（空）"}
+              </div>
+              <div className="spec-cond-row">
+                <span className="spec-cond-key">否则</span>
+                {segment.otherwise.map(segmentLabel).join(" + ") || "（空）"}
+              </div>
+              <div className="ai-settings-hint">
+                嵌套条件只读展示，需要调整请在外面重新生成。
+              </div>
             </div>
-            <div className="spec-cond-row">
-              <span className="spec-cond-key">则</span>
-              {segment.then.map(segmentLabel).join(" + ") || "（空）"}
-            </div>
-            <div className="spec-cond-row">
-              <span className="spec-cond-key">否则</span>
-              {segment.otherwise.map(segmentLabel).join(" + ") || "（空）"}
-            </div>
-          </div>
-        )}
+          ) : (
+            <ConditionEditor
+              condition={segment.when}
+              then={segment.then}
+              otherwise={segment.otherwise}
+              depth={depth}
+              onChange={(when, then, otherwise) =>
+                patch({ when, then, otherwise })
+              }
+            />
+          ))}
       </div>
     </div>
   );

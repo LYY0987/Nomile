@@ -1787,3 +1787,27 @@ mark {
 .ai-consent .check input {
   margin-top: 2px;
 }
+
+.spec-cond-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.spec-cond-branch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.spec-cond-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.spec-cond-list .spec-card {
+  background: var(--panel);
+}

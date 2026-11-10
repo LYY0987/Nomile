@@ -58,7 +58,7 @@ export const KIND_DESC: Record<RuleKind, string> = {
   stripAffix: "精确剥掉开头或结尾的固定文字",
   insertTime: "按修改 / 创建 / 当前时间加时间戳",
   ai: "由自然语言生成的母模板方案",
-  aiMap: "读取文本内容后逐文件起名",
+  aiMap: "读取文本 / PDF / Office 内容后逐文件起名",
 };
 
 /** 每类规则配一个图标，扫一眼就能分辨 */
