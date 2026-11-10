@@ -124,7 +124,7 @@ export function RulePanel() {
                 if (id) applyPreset(id);
               }}
             >
-              <option value="">快捷选择预设…</option>
+              <option value="">我的预设</option>
               {presets.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}（{p.rules.length} 条）
