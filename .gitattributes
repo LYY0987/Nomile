@@ -1,0 +1,9 @@
+# 统一按 LF 存库，避免 Windows 上 checkout 时整仓换行符漂移
+* text=auto eol=lf
+
+# 二进制文件不做换行处理
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
