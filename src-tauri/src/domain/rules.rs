@@ -790,6 +790,7 @@ mod tests {
             dir: "C:\\tmp".into(),
             name: name.into(),
             stem: stem.into(),
+            kind: crate::model::FileKind::of(ext, false),
             ext: ext.into(),
             size: 1024,
             modified,

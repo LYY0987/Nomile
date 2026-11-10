@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 
 use crate::domain::name::split_full_name;
 use crate::error::{AppError, Result};
-use crate::model::{FileEntry, ScanRequest, SortBy};
+use crate::model::{FileEntry, FileKind, ScanRequest, SortBy};
 
 pub struct ScanOutput {
     pub entries: Vec<FileEntry>,
@@ -120,6 +120,7 @@ pub fn scan_dir(req: &ScanRequest) -> Result<ScanOutput> {
             dir,
             name,
             stem,
+            kind: FileKind::of(&ext, is_dir),
             ext,
             size,
             modified,
@@ -185,6 +186,7 @@ fn scan_selected(paths: &[String], req: &ScanRequest) -> ScanOutput {
             dir,
             name,
             stem,
+            kind: FileKind::of(&ext, is_dir),
             ext,
             size: meta.len(),
             modified: to_millis(meta.modified().ok()),

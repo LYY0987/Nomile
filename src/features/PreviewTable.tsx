@@ -14,10 +14,26 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import type { ConflictPolicy, Issue, PlanItem, SortBy } from "../lib/types";
+import type { ConflictPolicy, FileKind, Issue, PlanItem, SortBy } from "../lib/types";
 import { useApp } from "../store/appStore";
 
 const ROW_H = 32;
+
+/** 类型列只放得下两三个字 */
+const KIND_LABEL: Record<FileKind, string> = {
+  folder: "文件夹",
+  image: "图片",
+  video: "视频",
+  audio: "音频",
+  document: "文档",
+  sheet: "表格",
+  slide: "演示",
+  archive: "压缩包",
+  code: "代码",
+  program: "程序",
+  font: "字体",
+  other: "其他",
+};
 
 const SORTS: { value: SortBy; label: string }[] = [
   { value: "name", label: "名称" },
@@ -347,6 +363,7 @@ export function PreviewTable() {
         <span className="col">原文件名</span>
         <span />
         <span className="col">新文件名</span>
+        <span className="col">类型</span>
         <span className="col">状态</span>
       </div>
 
@@ -408,6 +425,9 @@ export function PreviewTable() {
                     ) : (
                       <span style={{ color: "var(--text-faint)" }}>—</span>
                     )}
+                  </span>
+                  <span className="kind" data-kind={entry.kind}>
+                    {KIND_LABEL[entry.kind] ?? entry.kind}
                   </span>
                   <span className="status">
                     {!isSelected ? (

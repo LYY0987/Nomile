@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use crate::domain::name;
 use crate::domain::rules::{apply_stack, needs_meta, RuleContext};
 use crate::model::{
-    ConflictPolicy, FileEntry, Issue, IssueKind, IssueLevel, PlanItem, PreviewResult, RuleInstance,
+    ConflictPolicy, FileEntry, FileKind, Issue, IssueKind, IssueLevel, PlanItem, PreviewResult,
+    RuleInstance,
 };
 
 pub fn build_plan<F: Fn(&Path) -> bool>(
@@ -271,6 +272,7 @@ mod tests {
             dir: "C:\\tmp".into(),
             name: name.into(),
             stem,
+            kind: FileKind::of(&ext, false),
             ext,
             size: 1,
             modified: 0,

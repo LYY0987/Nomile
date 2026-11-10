@@ -65,6 +65,102 @@ impl MediaMeta {
     }
 }
 
+/// 文件类型分类，只用于界面展示，不参与命名规则
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileKind {
+    Folder,
+    Image,
+    Video,
+    Audio,
+    Document,
+    Sheet,
+    Slide,
+    Archive,
+    Code,
+    Program,
+    Font,
+    Other,
+}
+
+impl Default for FileKind {
+    fn default() -> Self {
+        FileKind::Other
+    }
+}
+
+const IMAGE_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "jpe", "jfif", "gif", "bmp", "webp", "avif", "heic", "heif", "tif",
+    "tiff", "svg", "ico", "psd", "ai", "raw", "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2",
+];
+const VIDEO_EXTS: &[&str] = &[
+    "mp4", "m4v", "mkv", "avi", "mov", "wmv", "flv", "f4v", "webm", "mpg", "mpeg", "m2ts", "3gp",
+    "rm", "rmvb", "vob", "ogv",
+];
+const AUDIO_EXTS: &[&str] = &[
+    "mp3", "wav", "flac", "aac", "ogg", "oga", "m4a", "wma", "ape", "alac", "opus", "mid", "midi",
+    "amr", "aiff", "aif",
+];
+const DOC_EXTS: &[&str] = &[
+    "doc", "docx", "pdf", "txt", "rtf", "odt", "pages", "tex", "md", "markdown", "epub", "mobi",
+    "wps",
+];
+const SHEET_EXTS: &[&str] = &["xls", "xlsx", "xlsm", "xlsb", "csv", "tsv", "ods", "numbers"];
+const SLIDE_EXTS: &[&str] = &["ppt", "pptx", "pps", "ppsx", "odp", "key"];
+const ARCHIVE_EXTS: &[&str] = &[
+    "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "zst", "iso", "cab", "lz", "lzma", "arj",
+];
+const CODE_EXTS: &[&str] = &[
+    "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "pyw", "java", "kt", "kts", "go", "c",
+    "cc", "cpp", "cxx", "h", "hpp", "hxx", "cs", "rb", "php", "swift", "m", "mm", "lua", "pl",
+    "r", "sql", "html", "htm", "css", "scss", "sass", "less", "json", "json5", "xml", "yml",
+    "yaml", "toml", "ini", "conf", "cfg", "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1",
+    "vue", "svelte", "dart", "scala",
+];
+const PROGRAM_EXTS: &[&str] = &[
+    "exe", "msi", "dll", "sys", "so", "dylib", "apk", "ipa", "dmg", "pkg", "deb", "rpm",
+    "appimage", "com", "scr", "bin",
+];
+const FONT_EXTS: &[&str] = &["ttf", "otf", "woff", "woff2", "eot", "fon", "fnt"];
+
+impl FileKind {
+    /// 按扩展名归类；目录一律算「文件夹」。只看后缀，不读文件内容。
+    pub fn of(ext: &str, is_dir: bool) -> FileKind {
+        if is_dir {
+            return FileKind::Folder;
+        }
+        let e = ext.trim_start_matches('.').to_ascii_lowercase();
+        if e.is_empty() {
+            return FileKind::Other;
+        }
+
+        // 顺序有意义：`.ts` 归代码（TypeScript 更常见），视频容器只认 `m2ts`
+        if IMAGE_EXTS.contains(&e.as_str()) {
+            FileKind::Image
+        } else if VIDEO_EXTS.contains(&e.as_str()) {
+            FileKind::Video
+        } else if AUDIO_EXTS.contains(&e.as_str()) {
+            FileKind::Audio
+        } else if DOC_EXTS.contains(&e.as_str()) {
+            FileKind::Document
+        } else if SHEET_EXTS.contains(&e.as_str()) {
+            FileKind::Sheet
+        } else if SLIDE_EXTS.contains(&e.as_str()) {
+            FileKind::Slide
+        } else if ARCHIVE_EXTS.contains(&e.as_str()) {
+            FileKind::Archive
+        } else if CODE_EXTS.contains(&e.as_str()) {
+            FileKind::Code
+        } else if PROGRAM_EXTS.contains(&e.as_str()) {
+            FileKind::Program
+        } else if FONT_EXTS.contains(&e.as_str()) {
+            FileKind::Font
+        } else {
+            FileKind::Other
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
@@ -77,6 +173,9 @@ pub struct FileEntry {
     pub stem: String,
     /// 不含点，可为空
     pub ext: String,
+    /// 类型分类（图片 / 文档 / 视频…），只用于展示
+    #[serde(default)]
+    pub kind: FileKind,
     pub size: u64,
     /// 修改时间，Unix 毫秒
     pub modified: i64,
@@ -540,4 +639,37 @@ pub struct Preset {
 #[serde(rename_all = "camelCase")]
 pub struct PresetFile {
     pub presets: Vec<Preset>,
+}
+
+#[cfg(test)]
+mod kind_tests {
+    use super::FileKind;
+
+    #[test]
+    fn classifies_common_extensions() {
+        assert_eq!(FileKind::of("jpg", false), FileKind::Image);
+        assert_eq!(FileKind::of("PNG", false), FileKind::Image);
+        assert_eq!(FileKind::of("mp4", false), FileKind::Video);
+        assert_eq!(FileKind::of("flac", false), FileKind::Audio);
+        assert_eq!(FileKind::of("docx", false), FileKind::Document);
+        assert_eq!(FileKind::of("xlsx", false), FileKind::Sheet);
+        assert_eq!(FileKind::of("pptx", false), FileKind::Slide);
+        assert_eq!(FileKind::of("zip", false), FileKind::Archive);
+        assert_eq!(FileKind::of("ts", false), FileKind::Code);
+        assert_eq!(FileKind::of("exe", false), FileKind::Program);
+        assert_eq!(FileKind::of("ttf", false), FileKind::Font);
+        assert_eq!(FileKind::of("", false), FileKind::Other);
+        assert_eq!(FileKind::of("unknownext", false), FileKind::Other);
+        // 目录一律算文件夹，哪怕名字里带扩展名
+        assert_eq!(FileKind::of("", true), FileKind::Folder);
+        assert_eq!(FileKind::of("jpg", true), FileKind::Folder);
+    }
+
+    #[test]
+    fn serde_uses_camel_case_tags() {
+        let json = serde_json::to_string(&FileKind::Image).unwrap();
+        assert_eq!(json, "\"image\"");
+        let back: FileKind = serde_json::from_str("\"sheet\"").unwrap();
+        assert_eq!(back, FileKind::Sheet);
+    }
 }

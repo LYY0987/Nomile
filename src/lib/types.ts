@@ -17,12 +17,28 @@ export interface MediaMeta {
   error: string | null;
 }
 
+/** 文件类型分类，仅用于展示，不参与命名规则 */
+export type FileKind =
+  | "folder"
+  | "image"
+  | "video"
+  | "audio"
+  | "document"
+  | "sheet"
+  | "slide"
+  | "archive"
+  | "code"
+  | "program"
+  | "font"
+  | "other";
+
 export interface FileEntry {
   id: number;
   dir: string;
   name: string;
   stem: string;
   ext: string;
+  kind: FileKind;
   size: number;
   modified: number;
   created: number;

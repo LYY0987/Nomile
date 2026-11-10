@@ -254,6 +254,7 @@ mod tests {
             dir: "C:\\tmp".into(),
             name: "IMG_0001.jpg".into(),
             stem: "IMG_0001".into(),
+            kind: crate::model::FileKind::Image,
             ext: "jpg".into(),
             size: 857,
             modified: 0,
