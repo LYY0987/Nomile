@@ -676,7 +676,11 @@ select.input {
   text-align: center;
 }
 .row .kind {
-  justify-self: center;
+  display: flex;
+  justify-content: center;
+}
+.row .kind .kind-tag {
+  display: inline-block;
   max-width: 64px;
   padding: 0 6px;
   height: 17px;
@@ -688,7 +692,7 @@ select.input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}  
+}
 .row .status {
   display: flex;
   gap: 4px;

@@ -426,8 +426,10 @@ export function PreviewTable() {
                       <span style={{ color: "var(--text-faint)" }}>—</span>
                     )}
                   </span>
-                  <span className="kind" data-kind={entry.kind}>
-                    {KIND_LABEL[entry.kind] ?? entry.kind}
+                  <span className="kind">
+                    <span className="kind-tag" data-kind={entry.kind}>
+                      {KIND_LABEL[entry.kind] ?? entry.kind}
+                    </span>
                   </span>
                   <span className="status">
                     {!isSelected ? (
