@@ -9,8 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::domain::name;
 use crate::domain::rules::{apply_stack, needs_meta, RuleContext};
 use crate::model::{
-    ConflictPolicy, FileEntry, FileKind, Issue, IssueKind, IssueLevel, PlanItem, PreviewResult,
-    RuleInstance,
+    ConflictPolicy, FileEntry, Issue, IssueKind, IssueLevel, PlanItem, PreviewResult, RuleInstance,
 };
 
 pub fn build_plan<F: Fn(&Path) -> bool>(
@@ -263,7 +262,7 @@ fn diff_span(a: &str, b: &str) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ConflictPolicy, Rule, SeqPosition, Target};
+    use crate::model::{ConflictPolicy, FileKind, Rule, SeqPosition, Target};
 
     fn entry(id: u64, name: &str) -> FileEntry {
         let (stem, ext) = name::split_full_name(name, false);
