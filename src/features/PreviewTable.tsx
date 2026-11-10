@@ -30,11 +30,27 @@ const SORTS: { value: SortBy; label: string }[] = [
 function warnLabel(issue: Issue): string {
   switch (issue.kind) {
     case "existsOnDisk":
-      return "目标已存在";
-    case "metaMissing":
-      return "无元数据";
+      // 自动加序号时会走到这里；策略为跳过时是 Info 级，由状态列另行判断
+      return "重名避让";
     case "tooLong":
-      return "路径过长";
+      return "路径超长";
+    case "metaMissing":
+      return "缺元数据";
+    default:
+      return issue.message.slice(0, 8);
+  }
+}
+
+function errorLabel(issue: Issue): string {
+  switch (issue.kind) {
+    case "emptyName":
+      return "名字为空";
+    case "illegalChar":
+      return "含非法字符";
+    case "reservedName":
+      return "系统保留名";
+    case "duplicate":
+      return "与同批重名";
     default:
       return issue.message.slice(0, 8);
   }
@@ -299,27 +315,27 @@ export function PreviewTable() {
                   </span>
                   <span className="status">
                     {!isSelected ? (
-                      <span className="tag mute">未选中</span>
+                      <span className="tag mute">未选择</span>
                     ) : errIssue ? (
                       <span className="tag err" title={errIssue.message}>
-                        {errIssue.message.length > 12
-                          ? `${errIssue.message.slice(0, 12)}…`
-                          : errIssue.message}
+                        {errorLabel(errIssue)}
                       </span>
                     ) : warnIssue ? (
                       <span className="tag warn" title={warnIssue.message}>
                         {warnLabel(warnIssue)}
                       </span>
-                    ) : item?.changed ? (
-                      <span className="tag ok">将改名</span>
                     ) : infoIssue?.kind === "caseOnly" ? (
-                      <span className="tag mute">仅大小写</span>
-                    ) : infoIssue ? (
                       <span className="tag mute" title={infoIssue.message}>
-                        已存在·跳过
+                        仅改大小写
                       </span>
+                    ) : infoIssue?.kind === "existsOnDisk" ? (
+                      <span className="tag mute" title={infoIssue.message}>
+                        重名跳过
+                      </span>
+                    ) : item?.changed ? (
+                      <span className="tag ok">待执行</span>
                     ) : (
-                      <span className="tag mute">不变</span>
+                      <span className="tag mute">无需改动</span>
                     )}
                   </span>
                 </div>
@@ -334,7 +350,7 @@ export function PreviewTable() {
           共 <b>{entries.length}</b> 项 · 选中 <b>{selected.length}</b>
         </span>
         <span className="stat">
-          将变更 <b>{plan?.changed ?? 0}</b>
+          待执行 <b>{plan?.changed ?? 0}</b> 项
         </span>
         {plan && plan.errors > 0 && (
           <span className="stat err">
