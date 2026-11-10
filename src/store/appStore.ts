@@ -106,9 +106,18 @@ export interface ScanOptions {
 export type SourceMode = "dir" | "files";
 
 interface Toast {
+  /** 每次弹出递增，Toast 组件靠它重置倒计时 */
+  id: number;
   text: string;
   kind: "ok" | "err" | "info";
+  /** 操作按钮，给了才渲染，比如「撤销」 */
+  actionLabel?: string;
+  action?: () => void;
+  /** 秒；给了才显示倒计时并按这个时长关闭 */
+  seconds?: number;
 }
+
+let toastSeq = 0;
 
 interface AppState {
   dir: string;
@@ -129,6 +138,7 @@ interface AppState {
   scanning: boolean;
   executing: boolean;
   toast: Toast | null;
+  showToast: (t: Omit<Toast, "id">) => void;
 
   historyOpen: boolean;
   history: OperationSummary[];
@@ -414,14 +424,7 @@ export const useApp = create<AppState>((set, get) => ({
         rules,
         conflictPolicy: policy,
       });
-      if (res.failed.length > 0) {
-        get().notify(
-          `已重命名 ${res.renamed} 项，${res.failed.length} 项失败：${res.failed[0].reason}`,
-          "info"
-        );
-      } else {
-        get().notify(`已重命名 ${res.renamed} 项，可随时撤销`, "ok");
-      }
+      // 结果统一在重扫之后弹一次，避免先闪一条短提示再被带按钮的提示顶掉
       // 文件模式：文件名已经变了，把清单同步成新路径，否则重扫时旧路径全部找不到
       if (get().mode === "files") {
         const byPath = new Map(
@@ -456,6 +459,36 @@ export const useApp = create<AppState>((set, get) => ({
         ],
       });
       await get().scan(dir);
+
+      const failedCount = res.failed.length;
+      const undoable = res.state !== "interrupted" && res.renamed > 0;
+
+      if (undoable) {
+        const secs = 12;
+        get().showToast({
+          kind: failedCount > 0 ? "info" : "ok",
+          text:
+            (failedCount > 0
+              ? `已重命名 ${res.renamed} 项，${failedCount} 项失败`
+              : `已重命名 ${res.renamed} 项`) +
+            ` · ${secs} 秒内可点「撤销」直接还原，提示关闭后请到「历史记录」撤销`,
+          actionLabel: "撤销",
+          action: () => {
+            get().clearToast();
+            void get().undoOperation(res.operationId);
+          },
+          seconds: secs,
+        });
+        // 顺手把历史记录打开，让这一条立刻可见
+        void get().toggleHistory(true);
+      } else {
+        get().notify(
+          failedCount > 0
+            ? `已重命名 ${res.renamed} 项，${failedCount} 项失败：${res.failed[0].reason}`
+            : "这次执行没有实际变化",
+          failedCount > 0 ? "err" : "info"
+        );
+      }
     } catch (e) {
       get().notify(errorText(e), "err");
     } finally {
@@ -557,7 +590,11 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
-  notify: (text, kind = "info") => set({ toast: { text, kind } }),
+  showToast: (t) => {
+    toastSeq += 1;
+    set({ toast: { ...t, id: toastSeq } });
+  },
+  notify: (text, kind = "info") => get().showToast({ text, kind }),
   clearToast: () => set({ toast: null }),
 }));
 

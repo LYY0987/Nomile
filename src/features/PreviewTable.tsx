@@ -372,7 +372,7 @@ export function PreviewTable() {
             value={policy}
             onChange={(e) => setPolicy(e.currentTarget.value as ConflictPolicy)}
           >
-            <option value="autoSuffix">自动加 (1)(2)</option>
+            <option value="autoSuffix">自动加序号</option>
             <option value="skip">跳过该文件</option>
           </select>
         </label>
