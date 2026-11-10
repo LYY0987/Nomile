@@ -78,16 +78,17 @@ export const KIND_ICON: Record<RuleKind, typeof Replace> = {
 export const ADD_ORDER: RuleKind[] = [
   "affix",
   "sequence",
-  "template",
+  "insertTime",
   "replace",
   "case",
   "cleanup",
 ];
 
-/** 规则库的分组，覆盖全部 15 条 */
+/** 规则库的分组，覆盖全部 15 条且每条只出现一次 */
 export const GROUPS: { title: string; items: RuleKind[] }[] = [
   { title: "常用", items: ADD_ORDER },
   { title: "定位与截取", items: ["slice", "insert", "removeBrackets", "stripCopyMarks"] },
   { title: "清理与规范", items: ["normalizeSeparators", "stripAffix", "limitLength"] },
-  { title: "格式与时间", items: ["setExtension", "insertTime"] },
+  // 模板参数多、要先查变量表，不适合当起手式，放到库里
+  { title: "文本与格式", items: ["template", "setExtension"] },
 ];
