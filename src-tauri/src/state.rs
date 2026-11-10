@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::ai::AiService;
 use crate::infra::config::ConfigStore;
 use crate::infra::history::HistoryStore;
 use crate::model::{FileEntry, MediaMeta};
@@ -20,14 +21,16 @@ pub struct AppState {
     pub sessions: Mutex<HashMap<String, ScanSession>>,
     pub config: ConfigStore,
     pub history: HistoryStore,
+    pub ai: AiService,
 }
 
 impl AppState {
-    pub fn new(config: ConfigStore, history: HistoryStore) -> Self {
+    pub fn new(config: ConfigStore, history: HistoryStore, ai: AiService) -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
             config,
             history,
+            ai,
         }
     }
 }

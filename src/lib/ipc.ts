@@ -4,6 +4,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  AiGenerateRequest,
+  AiProviderConfig,
+  AiProvidersView,
+  AiSchemeResult,
   ExecuteRequest,
   ExecuteResult,
   OperationSummary,
@@ -37,6 +41,34 @@ export const api = {
   getPresets: () => invoke<PresetFile>("get_presets"),
 
   savePresets: (presets: PresetFile) => invoke<void>("save_presets", { presets }),
+
+  aiListProviders: () => invoke<AiProvidersView>("ai_list_providers"),
+
+  aiSaveProvider: (provider: AiProviderConfig) =>
+    invoke<AiProvidersView>("ai_save_provider", { provider }),
+
+  aiDeleteProvider: (providerId: string) =>
+    invoke<AiProvidersView>("ai_delete_provider", { providerId }),
+
+  aiSetActiveProvider: (providerId: string) =>
+    invoke<AiProvidersView>("ai_set_active_provider", { providerId }),
+
+  aiSetKey: (providerId: string, key: string) =>
+    invoke<void>("ai_set_key", { providerId, key }),
+
+  aiDeleteKey: (providerId: string) =>
+    invoke<void>("ai_delete_key", { providerId }),
+
+  aiListModels: (providerId?: string | null) =>
+    invoke<string[]>("ai_list_models", { providerId: providerId ?? null }),
+
+  aiTestProvider: (providerId?: string | null) =>
+    invoke<string>("ai_test_provider", { providerId: providerId ?? null }),
+
+  aiGenerate: (req: AiGenerateRequest) =>
+    invoke<AiSchemeResult>("ai_generate", { req }),
+
+  aiCancel: () => invoke<void>("ai_cancel"),
 };
 
 export function errorText(error: unknown): string {

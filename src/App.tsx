@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { Toast } from "./components/Toast";
+import { AiPanel } from "./features/AiPanel";
 import { HistoryDrawer } from "./features/HistoryDrawer";
 import { PreviewTable } from "./features/PreviewTable";
 import { RulePanel } from "./features/RulePanel";
@@ -13,10 +14,12 @@ export default function App() {
   const selected = useApp((s) => s.selected);
   const policy = useApp((s) => s.policy);
   const sessionId = useApp((s) => s.sessionId);
+  const panelMode = useApp((s) => s.panelMode);
+  const aiSpec = useApp((s) => s.aiSpec);
   const scanning = useApp((s) => s.scanning);
   const executing = useApp((s) => s.executing);
 
-  // 规则 / 选中 / 冲突策略任何一处变化，250ms 后重新算一遍预览。
+  // 规则 / 选中 / 冲突策略 / 面板任何一处变化，250ms 后重新算一遍预览。
   // 计算在 Rust 里是纯函数，1 万条也就几十毫秒，防抖只是为了别让输入卡顿。
   useEffect(() => {
     if (!sessionId) return;
@@ -24,7 +27,7 @@ export default function App() {
       void useApp.getState().refresh();
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [rules, selected, policy, sessionId]);
+  }, [rules, selected, policy, sessionId, panelMode, aiSpec]);
 
   // 启动时只恢复「载入条件」和冲突策略这类设置。
   // 目录和列表一律从空白开始：不恢复上次的目录，也不延续上次的撤销记录。
@@ -56,7 +59,7 @@ export default function App() {
       {(scanning || executing) && <div className="busy-line" />}
       <Toolbar />
       <div className="body">
-        <RulePanel />
+        {panelMode === "ai" ? <AiPanel /> : <RulePanel />}
         <PreviewTable />
       </div>
       <HistoryDrawer />

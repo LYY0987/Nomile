@@ -46,7 +46,7 @@ export function RuleLibrary({
         <div className="modal-head">
           <Library />
           <span className="panel-title">规则库</span>
-          <span className="panel-count">15 条规则</span>
+          <span className="panel-count">15 条手动规则</span>
           <div className="spacer" />
           <button className="btn icon" title="关闭" onClick={onClose}>
             <X />

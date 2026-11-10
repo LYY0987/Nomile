@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { api, errorText } from "../lib/ipc";
 import type {
+  AiSpec,
   ConflictPolicy,
   FileEntry,
   OperationSummary,
@@ -97,6 +98,17 @@ function createRule(kind: RuleKind): Rule {
         position: "prefix",
         separator: "_",
       };
+    case "ai":
+      return {
+        kind: "ai",
+        spec: {
+          version: 1,
+          segments: [],
+          transforms: [],
+          extension: { mode: "keep", value: "" },
+          fallback: { onEmpty: "keepOriginal" },
+        },
+      };
   }
 }
 
@@ -157,6 +169,26 @@ interface Toast {
 
 let toastSeq = 0;
 
+/** 左侧面板：手动规则或 AI 重命名，两者互斥 */
+export type PanelMode = "rules" | "ai";
+
+function activeRules(state: {
+  panelMode: PanelMode;
+  aiSpec: AiSpec | null;
+  rules: RuleInstance[];
+}): RuleInstance[] {
+  if (state.panelMode !== "ai") return state.rules;
+  if (!state.aiSpec) return [];
+  return [
+    {
+      id: "ai-scheme",
+      enabled: true,
+      target: "name",
+      rule: { kind: "ai", spec: state.aiSpec },
+    },
+  ];
+}
+
 interface AppState {
   dir: string;
   mode: SourceMode;
@@ -169,6 +201,10 @@ interface AppState {
   /** 最近一次执行在文件模式下造成的路径变化，撤销时用来把清单改回去 */
   renamedFiles: { from: string; to: string }[];
   rules: RuleInstance[];
+  /** 左侧当前面板 */
+  panelMode: PanelMode;
+  /** AI 面板最近应用的方案；手动规则不受影响 */
+  aiSpec: AiSpec | null;
   plan: PreviewResult | null;
   policy: ConflictPolicy;
   options: ScanOptions;
@@ -207,6 +243,8 @@ interface AppState {
   moveRule: (id: string, delta: number) => void;
   clearRules: () => void;
   setRules: (rules: RuleInstance[]) => void;
+  setPanelMode: (mode: PanelMode) => void;
+  setAiSpec: (spec: AiSpec | null) => void;
 
   toggleSelect: (id: number) => void;
   /** ids 为空时作用于整个列表；传了候选集合就只在该集合内操作 */
@@ -240,6 +278,8 @@ export const useApp = create<AppState>((set, get) => ({
   query: "",
   renamedFiles: [],
   rules: [],
+  panelMode: "rules",
+  aiSpec: null,
   plan: null,
   policy: "autoSuffix",
   options: {
@@ -395,6 +435,8 @@ export const useApp = create<AppState>((set, get) => ({
 
   clearRules: () => set({ rules: [] }),
   setRules: (rules) => set({ rules }),
+  setPanelMode: (panelMode) => set({ panelMode }),
+  setAiSpec: (aiSpec) => set({ aiSpec }),
 
   toggleSelect: (id) =>
     set((s) => ({
@@ -431,7 +473,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   refresh: async () => {
-    const { sessionId, rules, selected, entries, policy } = get();
+    const { sessionId, selected, entries, policy } = get();
     if (!sessionId) return;
     if (selected.length === 0) {
       set({ plan: null });
@@ -441,7 +483,7 @@ export const useApp = create<AppState>((set, get) => ({
       const plan = await api.preview({
         sessionId,
         ids: selected.length === entries.length ? null : selected,
-        rules,
+        rules: activeRules(get()),
         conflictPolicy: policy,
       });
       set({ plan });
@@ -451,7 +493,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   run: async () => {
-    const { sessionId, rules, selected, entries, policy, plan, dir } = get();
+    const { sessionId, selected, entries, policy, plan, dir } = get();
     if (!sessionId || !plan || !plan.canExecute) return;
 
     set({ executing: true });
@@ -459,7 +501,7 @@ export const useApp = create<AppState>((set, get) => ({
       const res = await api.execute({
         sessionId,
         ids: selected.length === entries.length ? null : selected,
-        rules,
+        rules: activeRules(get()),
         conflictPolicy: policy,
       });
       // 结果统一在重扫之后弹一次，避免先闪一条短提示再被带按钮的提示顶掉

@@ -202,7 +202,8 @@ export type Rule =
   | SetExtensionRule
   | NormalizeSeparatorsRule
   | StripAffixRule
-  | InsertTimeRule;
+  | InsertTimeRule
+  | AiRule;
 
 export type RuleKind = Rule["kind"];
 
@@ -331,4 +332,143 @@ export interface Preset {
 
 export interface PresetFile {
   presets: Preset[];
+}
+
+// ---------------------------------------------------------------- AI 母模板
+
+export type AiProviderKind = "ollama" | "openai";
+
+export interface AiProviderView {
+  id: string;
+  name: string;
+  kind: AiProviderKind;
+  baseUrl: string;
+  model: string;
+  hasKey: boolean;
+}
+
+export interface AiProvidersView {
+  providers: AiProviderView[];
+  activeId: string;
+}
+
+export interface AiProviderConfig {
+  id: string;
+  name: string;
+  kind: AiProviderKind;
+  baseUrl: string;
+  model: string;
+}
+
+export type AiField = "stem" | "parent" | "size" | "index" | "total";
+export type AiDateSource = "modified" | "created" | "now" | "shot";
+export type AiMetaKey =
+  | "camera"
+  | "make"
+  | "model"
+  | "lens"
+  | "title"
+  | "artist"
+  | "album"
+  | "track"
+  | "duration"
+  | "width"
+  | "height";
+export type AiExtMode = "keep" | "lower" | "upper" | "set";
+export type AiEmpty = "keepOriginal" | "empty";
+
+export type AiCondition =
+  | { type: "extIn"; values: string[] }
+  | { type: "extNotIn"; values: string[] }
+  | { type: "metaPresent"; key: AiMetaKey }
+  | { type: "nameMatches"; pattern: string }
+  | { type: "isDir"; value: boolean }
+  | { type: "sizeRange"; min?: number | null; max?: number | null };
+
+export type AiSegment =
+  | { type: "literal"; text: string }
+  | { type: "field"; field: AiField; format?: string; fallback?: string }
+  | { type: "sequence"; start: number; step: number; pad: number }
+  | {
+      type: "date";
+      source: AiDateSource;
+      format: string;
+      fallbackSource?: AiDateSource | null;
+      fallback?: string;
+    }
+  | { type: "meta"; key: AiMetaKey; format?: string; fallback?: string }
+  | { type: "extract"; pattern: string; group: number; fallback?: string }
+  | {
+      type: "condition";
+      when: AiCondition;
+      then: AiSegment[];
+      otherwise: AiSegment[];
+    }
+  | { type: "random"; len: number };
+
+export type AiTransform =
+  | {
+      type: "replace";
+      pattern: string;
+      with: string;
+      regex: boolean;
+      all: boolean;
+      caseSensitive: boolean;
+    }
+  | { type: "stripPrefix"; value: string }
+  | { type: "stripSuffix"; value: string }
+  | {
+      type: "removeBrackets";
+      round: boolean;
+      square: boolean;
+      curly: boolean;
+      cjk: boolean;
+      keepBrackets: boolean;
+    }
+  | { type: "stripCopyMarks"; trailingNumber: boolean }
+  | { type: "slice"; start: number; end: number; keep: boolean }
+  | { type: "case"; mode: CaseKind }
+  | {
+      type: "cleanup";
+      spaces: SpaceMode;
+      stripIllegal: boolean;
+      trim: boolean;
+      collapseRepeat: boolean;
+    }
+  | {
+      type: "normalizeSeparators";
+      to: string;
+      space: boolean;
+      underscore: boolean;
+      hyphen: boolean;
+      dot: boolean;
+    }
+  | { type: "limit"; max: number; middle: boolean };
+
+export interface AiSpec {
+  version: number;
+  segments: AiSegment[];
+  transforms: AiTransform[];
+  extension: { mode: AiExtMode; value: string };
+  fallback: { onEmpty: AiEmpty };
+}
+
+export interface AiRule {
+  kind: "ai";
+  spec: AiSpec;
+}
+
+export interface AiGenerateRequest {
+  requestId: string;
+  prompt: string;
+  sessionId?: string | null;
+  ids?: number[] | null;
+  providerId?: string | null;
+}
+
+export interface AiSchemeResult {
+  summary: string;
+  spec: AiSpec;
+  assumptions: string[];
+  unsupported: string[];
 }

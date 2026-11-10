@@ -1,3 +1,4 @@
+mod ai;
 mod commands;
 mod domain;
 mod error;
@@ -7,6 +8,7 @@ mod state;
 
 use tauri::Manager;
 
+use crate::ai::AiService;
 use crate::infra::config::ConfigStore;
 use crate::infra::history::HistoryStore;
 use crate::state::AppState;
@@ -37,7 +39,8 @@ pub fn run() {
 
             let config = ConfigStore::new(base.clone());
             let history = HistoryStore::new(base.join("operations"));
-            app.manage(AppState::new(config, history));
+            let ai = AiService::new(base.clone());
+            app.manage(AppState::new(config, history, ai));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -51,6 +54,16 @@ pub fn run() {
             commands::save_settings,
             commands::get_presets,
             commands::save_presets,
+            ai::commands::ai_list_providers,
+            ai::commands::ai_save_provider,
+            ai::commands::ai_delete_provider,
+            ai::commands::ai_set_active_provider,
+            ai::commands::ai_set_key,
+            ai::commands::ai_delete_key,
+            ai::commands::ai_list_models,
+            ai::commands::ai_test_provider,
+            ai::commands::ai_generate,
+            ai::commands::ai_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

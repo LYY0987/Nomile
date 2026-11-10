@@ -21,6 +21,7 @@ import type {
   TimeSource,
 } from "../lib/types";
 import { useApp } from "../store/appStore";
+import { ModeSwitch } from "./ModeSwitch";
 import { RuleLibrary } from "./RuleLibrary";
 import { ADD_ORDER, KIND_ICON, KIND_LABEL } from "./ruleCatalog";
 
@@ -54,6 +55,7 @@ export function RulePanel() {
 
   return (
     <div className="sidebar">
+      <ModeSwitch />
       <div className="panel-head">
         <span className="panel-title">规则栈</span>
         <span className="panel-count">{rules.length} 条</span>
@@ -221,21 +223,29 @@ function RuleCard({
       </div>
 
       <div className="rule-body">
-        {inst.rule.kind !== "template" && inst.rule.kind !== "setExtension" && (
-          <div className="field">
-            <span className="label">作用于</span>
-            <select
-              className="input small"
-              value={inst.target}
-              onChange={(e) =>
-                patchInstance(inst.id, {
-                  target: e.currentTarget.value as Target,
-                })
-              }
-            >
-              <option value="name">文件名</option>
-              <option value="extension">扩展名</option>
-            </select>
+        {inst.rule.kind !== "template" &&
+          inst.rule.kind !== "setExtension" &&
+          inst.rule.kind !== "ai" && (
+            <div className="field">
+              <span className="label">作用于</span>
+              <select
+                className="input small"
+                value={inst.target}
+                onChange={(e) =>
+                  patchInstance(inst.id, {
+                    target: e.currentTarget.value as Target,
+                  })
+                }
+              >
+                <option value="name">文件名</option>
+                <option value="extension">扩展名</option>
+              </select>
+            </div>
+          )}
+
+        {inst.rule.kind === "ai" && (
+          <div className="rule-hint">
+            这是 AI 生成的母模板方案。切到「AI 重命名」可以继续调整或重新生成。
           </div>
         )}
 

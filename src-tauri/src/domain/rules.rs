@@ -48,7 +48,11 @@ pub fn needs_meta(rules: &[RuleInstance]) -> bool {
     rules
         .iter()
         .filter(|r| r.enabled)
-        .any(|r| matches!(&r.rule, Rule::Template { pattern } if pattern_uses_meta(pattern)))
+        .any(|r| match &r.rule {
+            Rule::Template { pattern } => pattern_uses_meta(pattern),
+            Rule::Ai { spec } => crate::domain::ai_spec::needs_meta(spec),
+            _ => false,
+        })
 }
 
 fn pattern_uses_meta(pattern: &str) -> bool {
@@ -75,6 +79,11 @@ pub fn apply_stack(ctx: &RuleContext<'_>, rules: &[RuleInstance]) -> Result<Name
     };
 
     for inst in rules.iter().filter(|r| r.enabled) {
+        if let Rule::Ai { spec } = &inst.rule {
+            parts = crate::domain::ai_spec::apply(ctx, spec)?;
+            continue;
+        }
+
         if let Rule::Template { pattern } = &inst.rule {
             let rendered = render_template(
                 pattern,
@@ -115,7 +124,7 @@ pub fn apply_stack(ctx: &RuleContext<'_>, rules: &[RuleInstance]) -> Result<Name
     Ok(parts)
 }
 
-fn apply_one(rule: &Rule, ctx: &RuleContext<'_>, input: &str) -> Result<String, String> {
+pub(crate) fn apply_one(rule: &Rule, ctx: &RuleContext<'_>, input: &str) -> Result<String, String> {
     Ok(match rule {
         Rule::Replace {
             find,
@@ -168,6 +177,8 @@ fn apply_one(rule: &Rule, ctx: &RuleContext<'_>, input: &str) -> Result<String, 
         Rule::Template { .. } => input.to_string(),
         // SetExtension 在 apply_stack 里单独处理
         Rule::SetExtension { .. } => input.to_string(),
+        // Ai 在 apply_stack 里单独处理
+        Rule::Ai { .. } => input.to_string(),
     })
 }
 
@@ -579,7 +590,7 @@ fn apply_insert_time(
     }
 }
 
-fn normalize_ext(ext: &str) -> String {
+pub(crate) fn normalize_ext(ext: &str) -> String {
     ext.trim().trim_start_matches('.').trim().to_string()
 }
 
@@ -664,6 +675,27 @@ fn eval_token(token: &str, ctx: &RenderCtx<'_>) -> String {
     }
 }
 
+/// 供 AI 母模板复用同一套变量语义（日期格式、元数据、序号补零等）
+pub(crate) fn render_token(
+    entry: &FileEntry,
+    stem: &str,
+    ext: &str,
+    index: u64,
+    total: u64,
+    token: &str,
+) -> String {
+    eval_token(
+        token,
+        &RenderCtx {
+            entry,
+            stem,
+            ext,
+            index,
+            total,
+        },
+    )
+}
+
 /// 拍摄时间默认 `yyyy-MM-dd_HHmmss`：同一天连拍几十张时只有带时分秒才不会重名
 fn shot_text(meta: Option<&MediaMeta>, fmt: &str) -> String {
     let Some(ms) = meta.and_then(|m| m.shot) else {
@@ -744,7 +776,7 @@ fn to_chrono_fmt(fmt: &str) -> String {
         .replace("ss", "%S")
 }
 
-fn format_time(ms: i64, fmt: &str) -> String {
+pub(crate) fn format_time(ms: i64, fmt: &str) -> String {
     let pattern = if fmt.trim().is_empty() {
         "yyyy-MM-dd"
     } else {

@@ -1,5 +1,6 @@
 import {
   Ban,
+  Bot,
   Braces,
   Brackets,
   CalendarClock,
@@ -35,6 +36,7 @@ export const KIND_LABEL: Record<RuleKind, string> = {
   normalizeSeparators: "统一分隔符",
   stripAffix: "剥掉固定前后缀",
   insertTime: "插入时间",
+  ai: "AI 命名方案",
 };
 
 export const KIND_DESC: Record<RuleKind, string> = {
@@ -53,6 +55,7 @@ export const KIND_DESC: Record<RuleKind, string> = {
   normalizeSeparators: "空格 / 下划线 / 连字符统一成一种",
   stripAffix: "精确剥掉开头或结尾的固定文字",
   insertTime: "按修改 / 创建 / 当前时间加时间戳",
+  ai: "由自然语言生成的母模板方案",
 };
 
 /** 每类规则配一个图标，扫一眼就能分辨 */
@@ -72,6 +75,7 @@ export const KIND_ICON: Record<RuleKind, typeof Replace> = {
   normalizeSeparators: SlidersHorizontal,
   stripAffix: Crop,
   insertTime: CalendarClock,
+  ai: Bot,
 };
 
 /** 底部快捷区只放这 6 个最常用的 */

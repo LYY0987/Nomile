@@ -433,6 +433,8 @@ pub enum Rule {
         #[serde(default = "d_sep")]
         separator: String,
     },
+    /// AI 母模板：由自然语言提取的槽位生成主体名
+    Ai { spec: AiSpec },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -444,6 +446,295 @@ pub struct RuleInstance {
     #[serde(default)]
     pub target: Target,
     pub rule: Rule,
+}
+
+// ---------------------------------------------------------------- AI 母模板
+
+fn d_spec_version() -> u32 {
+    1
+}
+fn d_group() -> u32 {
+    1
+}
+fn d_rand_len() -> usize {
+    6
+}
+
+/// AI 方案里可取的字段（都只用于拼主体名，扩展名单独处理）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiField {
+    #[default]
+    Stem,
+    Parent,
+    Size,
+    Index,
+    Total,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiDateSource {
+    #[default]
+    Modified,
+    Created,
+    Now,
+    Shot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiMetaKey {
+    #[default]
+    Camera,
+    Make,
+    Model,
+    Lens,
+    Title,
+    Artist,
+    Album,
+    Track,
+    Duration,
+    Width,
+    Height,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiExtMode {
+    #[default]
+    Keep,
+    Lower,
+    Upper,
+    Set,
+}
+
+/// 渲染结果为空时的兜底策略
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiEmpty {
+    #[default]
+    KeepOriginal,
+    Empty,
+}
+
+/// 母模板的组成段。段与段直接拼接，分隔符必须由 literal 段显式写出。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum AiSegment {
+    Literal {
+        text: String,
+    },
+    Field {
+        #[serde(default)]
+        field: AiField,
+        /// 仅 Index 用：补零宽度
+        #[serde(default)]
+        format: String,
+        #[serde(default)]
+        fallback: String,
+    },
+    Sequence {
+        #[serde(default)]
+        start: u64,
+        #[serde(default = "d_step")]
+        step: u64,
+        #[serde(default = "d_pad")]
+        pad: u8,
+    },
+    Date {
+        #[serde(default)]
+        source: AiDateSource,
+        #[serde(default = "d_stamp_fmt")]
+        format: String,
+        /// 首选来源缺失时改用的时间来源，例如 EXIF 缺失改用修改时间
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fallback_source: Option<AiDateSource>,
+        #[serde(default)]
+        fallback: String,
+    },
+    Meta {
+        #[serde(default)]
+        key: AiMetaKey,
+        #[serde(default)]
+        format: String,
+        #[serde(default)]
+        fallback: String,
+    },
+    /// 用正则从当前主体名里提取一段
+    Extract {
+        pattern: String,
+        #[serde(default = "d_group")]
+        group: u32,
+        #[serde(default)]
+        fallback: String,
+    },
+    Condition {
+        when: AiCondition,
+        #[serde(default)]
+        then: Vec<AiSegment>,
+        #[serde(default)]
+        otherwise: Vec<AiSegment>,
+    },
+    Random {
+        #[serde(default = "d_rand_len")]
+        len: usize,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum AiCondition {
+    ExtIn {
+        values: Vec<String>,
+    },
+    ExtNotIn {
+        values: Vec<String>,
+    },
+    MetaPresent {
+        key: AiMetaKey,
+    },
+    NameMatches {
+        pattern: String,
+    },
+    IsDir {
+        value: bool,
+    },
+    SizeRange {
+        min: Option<u64>,
+        max: Option<u64>,
+    },
+}
+
+/// 先对原主体名做的一系列预处理
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum AiTransform {
+    Replace {
+        pattern: String,
+        #[serde(default)]
+        with: String,
+        #[serde(default)]
+        regex: bool,
+        #[serde(default = "d_true")]
+        all: bool,
+        #[serde(default = "d_true")]
+        case_sensitive: bool,
+    },
+    StripPrefix {
+        value: String,
+    },
+    StripSuffix {
+        value: String,
+    },
+    RemoveBrackets {
+        #[serde(default = "d_true")]
+        round: bool,
+        #[serde(default = "d_true")]
+        square: bool,
+        #[serde(default = "d_true")]
+        curly: bool,
+        #[serde(default = "d_true")]
+        cjk: bool,
+        #[serde(default)]
+        keep_brackets: bool,
+    },
+    StripCopyMarks {
+        #[serde(default = "d_true")]
+        trailing_number: bool,
+    },
+    Slice {
+        #[serde(default)]
+        start: i64,
+        #[serde(default)]
+        end: i64,
+        #[serde(default = "d_true")]
+        keep: bool,
+    },
+    Case {
+        #[serde(default)]
+        mode: CaseKind,
+    },
+    Cleanup {
+        #[serde(default)]
+        spaces: SpaceMode,
+        #[serde(default)]
+        strip_illegal: bool,
+        #[serde(default)]
+        trim: bool,
+        #[serde(default)]
+        collapse_repeat: bool,
+    },
+    NormalizeSeparators {
+        #[serde(default = "d_sep")]
+        to: String,
+        #[serde(default = "d_true")]
+        space: bool,
+        #[serde(default = "d_true")]
+        underscore: bool,
+        #[serde(default = "d_true")]
+        hyphen: bool,
+        #[serde(default = "d_true")]
+        dot: bool,
+    },
+    Limit {
+        #[serde(default = "d_limit")]
+        max: usize,
+        #[serde(default)]
+        middle: bool,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AiExtension {
+    pub mode: AiExtMode,
+    pub value: String,
+}
+
+impl Default for AiExtension {
+    fn default() -> Self {
+        Self {
+            mode: AiExtMode::Keep,
+            value: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AiFallback {
+    pub on_empty: AiEmpty,
+}
+
+impl Default for AiFallback {
+    fn default() -> Self {
+        Self {
+            on_empty: AiEmpty::KeepOriginal,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AiSpec {
+    pub version: u32,
+    pub segments: Vec<AiSegment>,
+    pub transforms: Vec<AiTransform>,
+    pub extension: AiExtension,
+    pub fallback: AiFallback,
+}
+
+impl Default for AiSpec {
+    fn default() -> Self {
+        Self {
+            version: d_spec_version(),
+            segments: Vec::new(),
+            transforms: Vec::new(),
+            extension: AiExtension::default(),
+            fallback: AiFallback::default(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------- 预览 / 计划
