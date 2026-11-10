@@ -103,13 +103,90 @@ export interface CleanupRule {
   collapseRepeat: boolean;
 }
 
+/** 区间截取：保留一段，还是删掉一段 */
+export type SliceMode = "keep" | "cut";
+/** 超长时的截断方式 */
+export type LimitMode = "truncate" | "middle";
+/** 插入时间戳的取值来源 */
+export type TimeSource = "modified" | "created" | "now";
+
+export interface SliceRule {
+  kind: "slice";
+  start: number;
+  end: number;
+  mode: SliceMode;
+}
+
+export interface InsertRule {
+  kind: "insert";
+  at: number;
+  text: string;
+}
+
+export interface RemoveBracketsRule {
+  kind: "removeBrackets";
+  round: boolean;
+  square: boolean;
+  curly: boolean;
+  cjk: boolean;
+  keepBrackets: boolean;
+}
+
+export interface StripCopyMarksRule {
+  kind: "stripCopyMarks";
+  trailingNumber: boolean;
+}
+
+export interface LimitLengthRule {
+  kind: "limitLength";
+  max: number;
+  mode: LimitMode;
+}
+
+export interface SetExtensionRule {
+  kind: "setExtension";
+  ext: string;
+}
+
+export interface NormalizeSeparatorsRule {
+  kind: "normalizeSeparators";
+  to: string;
+  space: boolean;
+  underscore: boolean;
+  hyphen: boolean;
+  dot: boolean;
+}
+
+export interface StripAffixRule {
+  kind: "stripAffix";
+  prefix: string;
+  suffix: string;
+}
+
+export interface InsertTimeRule {
+  kind: "insertTime";
+  source: TimeSource;
+  format: string;
+  position: SeqPosition;
+  separator: string;
+}
+
 export type Rule =
   | ReplaceRule
   | SequenceRule
   | TemplateRule
   | CaseRule
   | AffixRule
-  | CleanupRule;
+  | CleanupRule
+  | SliceRule
+  | InsertRule
+  | RemoveBracketsRule
+  | StripCopyMarksRule
+  | LimitLengthRule
+  | SetExtensionRule
+  | NormalizeSeparatorsRule
+  | StripAffixRule
+  | InsertTimeRule;
 
 export type RuleKind = Rule["kind"];
 

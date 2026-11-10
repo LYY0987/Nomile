@@ -1,14 +1,9 @@
 import {
-  Braces,
-  Brackets,
-  CaseSensitive,
   ChevronDown,
   ChevronUp,
-  ListOrdered,
+  Library,
   Plus,
-  Replace,
   Save,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -17,34 +12,19 @@ import { useState } from "react";
 import type {
   CaseKind,
   CleanupRule,
+  LimitMode,
   RuleInstance,
-  RuleKind,
   SeqPosition,
+  SliceMode,
   SpaceMode,
   Target,
+  TimeSource,
 } from "../lib/types";
 import { useApp } from "../store/appStore";
+import { RuleLibrary } from "./RuleLibrary";
+import { ADD_ORDER, KIND_ICON, KIND_LABEL } from "./ruleCatalog";
 
-const KIND_LABEL: Record<RuleKind, string> = {
-  replace: "查找替换",
-  sequence: "序号",
-  template: "模板",
-  case: "大小写",
-  affix: "前后缀",
-  cleanup: "清理",
-};
-
-/** 每类规则配一个图标，一列卡片快速扫一眼就能分辨 */
-const KIND_ICON: Record<RuleKind, typeof Replace> = {
-  replace: Replace,
-  sequence: ListOrdered,
-  template: Braces,
-  case: CaseSensitive,
-  affix: Brackets,
-  cleanup: Sparkles,
-};
-
-function KindIcon({ kind }: { kind: RuleKind }) {
+function KindIcon({ kind }: { kind: RuleInstance["rule"]["kind"] }) {
   const Icon = KIND_ICON[kind];
   return <Icon />;
 }
@@ -59,14 +39,7 @@ const QUICK_TOKENS: [string, string][] = [
   ["扩展名", "${ext}"],
 ];
 
-const ADD_ORDER: RuleKind[] = [
-  "affix",
-  "sequence",
-  "template",
-  "replace",
-  "case",
-  "cleanup",
-];
+const ADD_ORDER_LABEL = "常用规则";
 
 export function RulePanel() {
   const rules = useApp((s) => s.rules);
@@ -78,6 +51,7 @@ export function RulePanel() {
   const deletePreset = useApp((s) => s.deletePreset);
 
   const [presetName, setPresetName] = useState("");
+  const [libOpen, setLibOpen] = useState(false);
 
   return (
     <div className="sidebar">
@@ -115,6 +89,18 @@ export function RulePanel() {
       </div>
 
       <div className="add-bar">
+        <div className="add-head">
+          <span className="add-label">{ADD_ORDER_LABEL}</span>
+          <div className="spacer" />
+          <button
+            className="btn small"
+            onClick={() => setLibOpen(true)}
+            title="查看全部规则，按需添加"
+          >
+            <Library />
+            规则库
+          </button>
+        </div>
         <div className="add-grid">
           {ADD_ORDER.map((kind) => (
             <button
@@ -175,6 +161,8 @@ export function RulePanel() {
           </div>
         )}
       </div>
+
+      {libOpen && <RuleLibrary open onClose={() => setLibOpen(false)} />}
     </div>
   );
 }
@@ -238,7 +226,7 @@ function RuleCard({
       </div>
 
       <div className="rule-body">
-        {inst.rule.kind !== "template" && (
+        {inst.rule.kind !== "template" && inst.rule.kind !== "setExtension" && (
           <div className="field">
             <span className="label">作用于</span>
             <select
@@ -458,6 +446,328 @@ function RuleCard({
 
         {inst.rule.kind === "cleanup" && (
           <CleanupFields rule={inst.rule} patch={patch} />
+        )}
+
+        {inst.rule.kind === "slice" && (
+          <>
+            <div className="field tight" style={{ flexWrap: "wrap" }}>
+              <span className="label">从第</span>
+              <input
+                className="input small num"
+                type="number"
+                value={inst.rule.start}
+                onChange={(e) => patch({ start: Number(e.currentTarget.value) })}
+              />
+              <span className="label">到第</span>
+              <input
+                className="input small num"
+                type="number"
+                value={inst.rule.end}
+                onChange={(e) => patch({ end: Number(e.currentTarget.value) })}
+              />
+              <span className="label">个字符</span>
+            </div>
+            <div className="field">
+              <span className="label">做法</span>
+              <select
+                className="input small"
+                value={inst.rule.mode}
+                onChange={(e) =>
+                  patch({ mode: e.currentTarget.value as SliceMode })
+                }
+              >
+                <option value="keep">只保留这一段</option>
+                <option value="cut">删掉这一段</option>
+              </select>
+            </div>
+            <div className="rule-hint">
+              从 1 开始数；负数从末尾数（-1 是最后一个字符）；结束填 0 表示一直到末尾。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "insert" && (
+          <>
+            <div className="field tight">
+              <span className="label">在第</span>
+              <input
+                className="input small num"
+                type="number"
+                value={inst.rule.at}
+                onChange={(e) => patch({ at: Number(e.currentTarget.value) })}
+              />
+              <span className="label">个字符前插入</span>
+            </div>
+            <div className="field">
+              <span className="label">内容</span>
+              <input
+                className="input small mono"
+                value={inst.rule.text}
+                placeholder="要插入的文字"
+                onChange={(e) => patch({ text: e.currentTarget.value })}
+              />
+            </div>
+            <div className="rule-hint">
+              填 1 表示插到最前面；负数从末尾数，-1 表示插到最后。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "removeBrackets" && (
+          <>
+            <div className="field tight" style={{ flexWrap: "wrap" }}>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.round}
+                  onChange={(e) => patch({ round: e.currentTarget.checked })}
+                />
+                （）
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.square}
+                  onChange={(e) => patch({ square: e.currentTarget.checked })}
+                />
+                【】[]
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.curly}
+                  onChange={(e) => patch({ curly: e.currentTarget.checked })}
+                />
+                {"{}"}
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.cjk}
+                  onChange={(e) => patch({ cjk: e.currentTarget.checked })}
+                />
+                中文括号
+              </label>
+            </div>
+            <div className="field tight">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.keepBrackets}
+                  onChange={(e) =>
+                    patch({ keepBrackets: e.currentTarget.checked })
+                  }
+                />
+                只删内容，留下括号本身
+              </label>
+            </div>
+            <div className="rule-hint">
+              括号里的内容会整段删掉；找不到配对括号的开括号原样保留。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "stripCopyMarks" && (
+          <>
+            <div className="field tight">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.trailingNumber}
+                  onChange={(e) =>
+                    patch({ trailingNumber: e.currentTarget.checked })
+                  }
+                />
+                也去掉结尾的 (1)(2) 编号
+              </label>
+            </div>
+            <div className="rule-hint">
+              处理「 - 副本」「 - copy」「副本 (2)」这类复制痕迹，只动结尾，且只认 1-3 位数字。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "limitLength" && (
+          <>
+            <div className="field tight">
+              <span className="label">最多</span>
+              <input
+                className="input small num"
+                type="number"
+                min={1}
+                max={260}
+                value={inst.rule.max}
+                onChange={(e) =>
+                  patch({ max: Number(e.currentTarget.value) || 1 })
+                }
+              />
+              <span className="label">个字符</span>
+            </div>
+            <div className="field">
+              <span className="label">超出时</span>
+              <select
+                className="input small"
+                value={inst.rule.mode}
+                onChange={(e) =>
+                  patch({ mode: e.currentTarget.value as LimitMode })
+                }
+              >
+                <option value="truncate">直接截掉尾巴</option>
+                <option value="middle">中间留省略号</option>
+              </select>
+            </div>
+            <div className="rule-hint">
+              只看这一段名字，不含扩展名；路径总长仍由执行前的校验检查。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "setExtension" && (
+          <>
+            <div className="field">
+              <span className="label">扩展名</span>
+              <input
+                className="input small mono"
+                value={inst.rule.ext}
+                placeholder="如 jpg，留空则去掉扩展名"
+                onChange={(e) => patch({ ext: e.currentTarget.value })}
+              />
+            </div>
+            <div className="rule-hint">
+              这条规则只改扩展名，不需要选「作用于」。点会自动去掉。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "normalizeSeparators" && (
+          <>
+            <div className="field tight">
+              <span className="label">统一成</span>
+              <input
+                className="input small mono"
+                style={{ width: 64 }}
+                value={inst.rule.to}
+                onChange={(e) => patch({ to: e.currentTarget.value })}
+              />
+            </div>
+            <div className="field tight" style={{ flexWrap: "wrap" }}>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.space}
+                  onChange={(e) => patch({ space: e.currentTarget.checked })}
+                />
+                空格
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.underscore}
+                  onChange={(e) =>
+                    patch({ underscore: e.currentTarget.checked })
+                  }
+                />
+                下划线
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.hyphen}
+                  onChange={(e) => patch({ hyphen: e.currentTarget.checked })}
+                />
+                连字符
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={inst.rule.dot}
+                  onChange={(e) => patch({ dot: e.currentTarget.checked })}
+                />
+                点
+              </label>
+            </div>
+            <div className="rule-hint">
+              勾上的符号会被换成「统一成」里的那一个，连续多个只会留一个。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "stripAffix" && (
+          <>
+            <div className="field">
+              <span className="label">删掉开头</span>
+              <input
+                className="input small mono"
+                value={inst.rule.prefix}
+                placeholder="开头是这串字就删掉"
+                onChange={(e) => patch({ prefix: e.currentTarget.value })}
+              />
+            </div>
+            <div className="field">
+              <span className="label">删掉结尾</span>
+              <input
+                className="input small mono"
+                value={inst.rule.suffix}
+                placeholder="结尾是这串字就删掉"
+                onChange={(e) => patch({ suffix: e.currentTarget.value })}
+              />
+            </div>
+            <div className="rule-hint">
+              只删一次，也不会删中间的；要删中间的用「查找替换」。
+            </div>
+          </>
+        )}
+
+        {inst.rule.kind === "insertTime" && (
+          <>
+            <div className="field">
+              <span className="label">时间</span>
+              <select
+                className="input small"
+                value={inst.rule.source}
+                onChange={(e) =>
+                  patch({ source: e.currentTarget.value as TimeSource })
+                }
+              >
+                <option value="modified">修改时间</option>
+                <option value="created">创建时间</option>
+                <option value="now">当前时间</option>
+              </select>
+            </div>
+            <div className="field tight">
+              <span className="label">格式</span>
+              <input
+                className="input small mono"
+                style={{ flex: 1 }}
+                value={inst.rule.format}
+                placeholder="yyyyMMdd"
+                onChange={(e) => patch({ format: e.currentTarget.value })}
+              />
+              <select
+                className="input small"
+                value={inst.rule.position}
+                onChange={(e) =>
+                  patch({ position: e.currentTarget.value as SeqPosition })
+                }
+              >
+                <option value="prefix">放前面</option>
+                <option value="suffix">放后面</option>
+                <option value="replace">替换原名字</option>
+              </select>
+            </div>
+            <div className="field tight">
+              <span className="label">分隔符</span>
+              <input
+                className="input small mono"
+                style={{ width: 64 }}
+                value={inst.rule.separator}
+                onChange={(e) => patch({ separator: e.currentTarget.value })}
+              />
+            </div>
+            <div className="rule-hint">
+              格式可用 yyyy MM dd HH mm ss。选「当前时间」时，预览值和执行值可能差几秒。
+            </div>
+          </>
         )}
       </div>
     </div>

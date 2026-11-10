@@ -13,7 +13,8 @@ use regex::{Regex, RegexBuilder};
 
 use crate::domain::name::{self, normalize_nfc, split_full_name};
 use crate::model::{
-    CaseKind, FileEntry, MediaMeta, Rule, RuleInstance, SeqPosition, SpaceMode, Target,
+    CaseKind, FileEntry, LimitMode, MediaMeta, Rule, RuleInstance, SeqPosition, SliceMode,
+    SpaceMode, Target, TimeSource,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -92,6 +93,12 @@ pub fn apply_stack(ctx: &RuleContext<'_>, rules: &[RuleInstance]) -> Result<Name
             continue;
         }
 
+        if let Rule::SetExtension { ext } = &inst.rule {
+            // 这条规则天然只改扩展名，不看 target
+            parts.ext = normalize_ext(ext);
+            continue;
+        }
+
         let current = match inst.target {
             Target::Name => parts.stem.clone(),
             Target::Extension => parts.ext.clone(),
@@ -132,8 +139,35 @@ fn apply_one(rule: &Rule, ctx: &RuleContext<'_>, input: &str) -> Result<String, 
             trim,
             collapse_repeat,
         } => apply_cleanup(*spaces, *strip_illegal, *trim, *collapse_repeat, input),
+        Rule::Slice { start, end, mode } => apply_slice(*start, *end, *mode, input),
+        Rule::Insert { at, text } => apply_insert(*at, text, input),
+        Rule::RemoveBrackets {
+            round,
+            square,
+            curly,
+            cjk,
+            keep_brackets,
+        } => apply_remove_brackets(*round, *square, *curly, *cjk, *keep_brackets, input),
+        Rule::StripCopyMarks { trailing_number } => apply_strip_copy(*trailing_number, input),
+        Rule::LimitLength { max, mode } => apply_limit(*max, *mode, input),
+        Rule::NormalizeSeparators {
+            to,
+            space,
+            underscore,
+            hyphen,
+            dot,
+        } => apply_normalize_sep(to, *space, *underscore, *hyphen, *dot, input),
+        Rule::StripAffix { prefix, suffix } => apply_strip_affix(prefix, suffix, input),
+        Rule::InsertTime {
+            source,
+            format,
+            position,
+            separator,
+        } => apply_insert_time(*source, format, *position, separator, ctx, input),
         // Template 在 apply_stack 里单独处理
         Rule::Template { .. } => input.to_string(),
+        // SetExtension 在 apply_stack 里单独处理
+        Rule::SetExtension { .. } => input.to_string(),
     })
 }
 
@@ -285,6 +319,268 @@ fn dedup_chars(input: &str) -> String {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------- 位置类规则
+
+/// 下标统一 1 基：正数从前往后，负数从末尾数，`end=0` 表示一直到末尾。
+/// 越界一律夹到边界，空区间就是空串，不会 panic。
+fn apply_slice(start: i64, end: i64, mode: SliceMode, input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let len = chars.len() as i64;
+    if len == 0 {
+        return String::new();
+    }
+
+    let begin = if start > 0 {
+        (start - 1).min(len)
+    } else if start < 0 {
+        (len + start).max(0)
+    } else {
+        0
+    };
+
+    let finish = if end == 0 {
+        len
+    } else if end > 0 {
+        end.min(len)
+    } else {
+        (len + end + 1).clamp(0, len)
+    };
+
+    let (b, f) = (begin.clamp(0, len) as usize, finish.clamp(0, len) as usize);
+
+    match mode {
+        SliceMode::Keep => {
+            if b < f {
+                chars[b..f].iter().collect()
+            } else {
+                String::new()
+            }
+        }
+        SliceMode::Cut => {
+            let head: String = chars[..b].iter().collect();
+            let tail: String = chars[f..].iter().collect();
+            format!("{head}{tail}")
+        }
+    }
+}
+
+fn apply_insert(at: i64, text: &str, input: &str) -> String {
+    if text.is_empty() {
+        return input.to_string();
+    }
+    let chars: Vec<char> = input.chars().collect();
+    let len = chars.len() as i64;
+    let idx = if at > 0 {
+        (at - 1).min(len)
+    } else if at < 0 {
+        (len + at + 1).clamp(0, len)
+    } else {
+        0
+    } as usize;
+
+    let mut out: String = chars[..idx].iter().collect();
+    out.push_str(text);
+    out.extend(chars[idx..].iter());
+    out
+}
+
+/// 括号成对消掉；找不到配对闭括号的开括号原样保留，避免把整串吃掉
+fn apply_remove_brackets(
+    round: bool,
+    square: bool,
+    curly: bool,
+    cjk: bool,
+    keep_brackets: bool,
+    input: &str,
+) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let pairs: Vec<(char, char)> = [
+        ('(', ')', round),
+        ('[', ']', square),
+        ('{', '}', curly),
+        ('（', '）', cjk),
+        ('【', '】', cjk),
+    ]
+    .into_iter()
+    .filter(|(_, _, on)| *on)
+    .map(|(o, c, _)| (o, c))
+    .collect();
+
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if let Some(&(_, close)) = pairs.iter().find(|(open, _)| *open == c) {
+            if let Some(rel) = chars[i + 1..].iter().position(|x| *x == close) {
+                if keep_brackets {
+                    out.push(c);
+                    out.push(close);
+                }
+                i += rel + 2;
+                continue;
+            }
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+fn apply_strip_copy(trailing_number: bool, input: &str) -> String {
+    let mut s = input.trim_end().to_string();
+    // 逐个剥：`xxx - 副本 (2)` 先掉 `(2)`，下一轮再掉 ` - 副本`
+    for _ in 0..8 {
+        // 拷成独立 String 再判断，避免一边借用 s 一边重新赋值
+        let trimmed = s.trim_end().to_string();
+        let mut hit = false;
+
+        if trailing_number {
+            if let Some(rest) = strip_trailing_number(&trimmed) {
+                s = rest;
+                hit = true;
+            }
+        }
+        if !hit {
+            if let Some(rest) = strip_trailing_copy_word(&trimmed) {
+                s = rest;
+                hit = true;
+            }
+        }
+        if !hit {
+            break;
+        }
+    }
+    s.trim_end().to_string()
+}
+
+/// 只认 1-3 位纯数字，`报告 (2024)` 这种年份不会被误删
+fn strip_trailing_number(s: &str) -> Option<String> {
+    let chars: Vec<char> = s.chars().collect();
+    let close = *chars.last()?;
+    let open = match close {
+        ')' => '(',
+        '）' => '（',
+        _ => return None,
+    };
+    let pos = chars.iter().rposition(|c| *c == open)?;
+    let inner: String = chars[pos + 1..chars.len() - 1].iter().collect();
+    if inner.is_empty() || inner.len() > 3 || !inner.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(chars[..pos].iter().collect::<String>().trim_end().to_string())
+}
+
+fn strip_trailing_copy_word(s: &str) -> Option<String> {
+    let lower = s.to_lowercase();
+    for suffix in [" - 副本", "- 副本", " - copy", "- copy", "副本", " copy"] {
+        if lower.ends_with(suffix) {
+            // 用字节长度回切：suffix 都是完整字符序列，切点必然落在 UTF-8 边界
+            return Some(s[..s.len() - suffix.len()].trim_end().to_string());
+        }
+    }
+    None
+}
+
+fn apply_limit(max: usize, mode: LimitMode, input: &str) -> String {
+    let max = max.max(1);
+    let chars: Vec<char> = input.chars().collect();
+    if chars.len() <= max {
+        return input.to_string();
+    }
+    match mode {
+        LimitMode::Truncate => chars[..max].iter().collect(),
+        LimitMode::Middle => {
+            if max == 1 {
+                return "…".to_string();
+            }
+            let keep = max - 1;
+            let head_n = (keep + 1) / 2;
+            let tail_n = keep - head_n;
+            let head: String = chars[..head_n].iter().collect();
+            let tail: String = chars[chars.len() - tail_n..].iter().collect();
+            format!("{head}…{tail}")
+        }
+    }
+}
+
+fn apply_normalize_sep(
+    to: &str,
+    space: bool,
+    underscore: bool,
+    hyphen: bool,
+    dot: bool,
+    input: &str,
+) -> String {
+    let target = if to.is_empty() { "_" } else { to };
+    let is_source = |c: char| -> bool {
+        (space && c.is_whitespace())
+            || (underscore && c == '_')
+            || (hyphen && matches!(c, '-' | '\u{2010}' | '\u{2011}' | '\u{FF0D}'))
+            || (dot && matches!(c, '.' | '\u{00B7}'))
+    };
+
+    let mut out = String::with_capacity(input.len());
+    let mut pending = false;
+    for c in input.chars() {
+        if is_source(c) {
+            pending = true;
+            continue;
+        }
+        if pending {
+            // 开头的分隔符直接丢掉，别让名字以「_」起步
+            if !out.is_empty() {
+                out.push_str(target);
+            }
+            pending = false;
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn apply_strip_affix(prefix: &str, suffix: &str, input: &str) -> String {
+    let mut s: &str = input;
+    if !prefix.is_empty() {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            s = rest;
+        }
+    }
+    if !suffix.is_empty() {
+        if let Some(rest) = s.strip_suffix(suffix) {
+            s = rest;
+        }
+    }
+    s.to_string()
+}
+
+fn apply_insert_time(
+    source: TimeSource,
+    format: &str,
+    position: SeqPosition,
+    separator: &str,
+    ctx: &RuleContext<'_>,
+    input: &str,
+) -> String {
+    let ms = match source {
+        TimeSource::Modified => ctx.entry.modified,
+        TimeSource::Created => ctx.entry.created,
+        TimeSource::Now => Local::now().timestamp_millis(),
+    };
+    let stamp = format_time(ms, format);
+    if stamp.is_empty() {
+        return input.to_string();
+    }
+    match position {
+        SeqPosition::Prefix => format!("{stamp}{separator}{input}"),
+        SeqPosition::Suffix => format!("{input}{separator}{stamp}"),
+        SeqPosition::Replace => stamp,
+    }
+}
+
+fn normalize_ext(ext: &str) -> String {
+    ext.trim().trim_start_matches('.').trim().to_string()
 }
 
 // ---------------------------------------------------------------- 模板
@@ -943,5 +1239,252 @@ mod tests {
         );
         r.enabled = false;
         assert_eq!(run(&e, &[r], 0), "a.txt");
+    }
+
+    // ---- 位置类规则
+
+    #[test]
+    fn slice_keep_range() {
+        let e = entry("IMG_20230101_120000.jpg", "IMG_20230101_120000", "jpg", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Slice {
+                start: 5,
+                end: 12,
+                mode: SliceMode::Keep,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "20230101.jpg");
+    }
+
+    #[test]
+    fn slice_negative_indexes() {
+        let e = entry("abcdef.txt", "abcdef", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Slice {
+                start: -3,
+                end: -1,
+                mode: SliceMode::Keep,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "def.txt");
+    }
+
+    #[test]
+    fn slice_cut_removes_prefix() {
+        let e = entry("IMG_2023_photo.jpg", "IMG_2023_photo", "jpg", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Slice {
+                start: 1,
+                end: 4,
+                mode: SliceMode::Cut,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "2023_photo.jpg");
+    }
+
+    #[test]
+    fn slice_out_of_range_never_panics() {
+        let e = entry("ab.txt", "ab", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Slice {
+                start: 99,
+                end: 200,
+                mode: SliceMode::Keep,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), ".txt");
+    }
+
+    #[test]
+    fn insert_at_position() {
+        let e = entry("abcdef.txt", "abcdef", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Insert {
+                at: 4,
+                text: "XX".into(),
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "abcXXdef.txt");
+    }
+
+    #[test]
+    fn insert_negative_goes_to_end() {
+        let e = entry("abcdef.txt", "abcdef", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Insert {
+                at: -1,
+                text: "XX".into(),
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "abcdefXX.txt");
+    }
+
+    #[test]
+    fn remove_brackets_both_styles() {
+        let e = entry("【站点】电影(1080p).mp4", "【站点】电影(1080p)", "mp4", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::RemoveBrackets {
+                round: true,
+                square: true,
+                curly: true,
+                cjk: true,
+                keep_brackets: false,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "电影.mp4");
+    }
+
+    #[test]
+    fn remove_brackets_keeps_brackets_when_asked() {
+        let e = entry("电影[1080p].mp4", "电影[1080p]", "mp4", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::RemoveBrackets {
+                round: false,
+                square: true,
+                curly: false,
+                cjk: false,
+                keep_brackets: true,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "电影[].mp4");
+    }
+
+    #[test]
+    fn strip_copy_marks() {
+        for (src, want) in [
+            ("报告 - 副本", "报告"),
+            ("报告 - 副本 (3)", "报告"),
+            ("照片(2)", "照片"),
+            ("照片（3）", "照片"),
+            ("file - Copy", "file"),
+            ("报告 (2024)", "报告 (2024)"), // 年份不该被当成副本编号
+        ] {
+            let e = entry(&format!("{src}.txt"), src, "txt", 0);
+            let rules = vec![inst(
+                Target::Name,
+                Rule::StripCopyMarks {
+                    trailing_number: true,
+                },
+            )];
+            assert_eq!(run(&e, &rules, 0), format!("{want}.txt"), "输入 {src}");
+        }
+    }
+
+    #[test]
+    fn limit_length_modes() {
+        let e = entry("abcdefghij.txt", "abcdefghij", "txt", 0);
+        let trunc = vec![inst(
+            Target::Name,
+            Rule::LimitLength {
+                max: 5,
+                mode: LimitMode::Truncate,
+            },
+        )];
+        assert_eq!(run(&e, &trunc, 0), "abcde.txt");
+
+        let middle = vec![inst(
+            Target::Name,
+            Rule::LimitLength {
+                max: 5,
+                mode: LimitMode::Middle,
+            },
+        )];
+        assert_eq!(run(&e, &middle, 0), "ab…ij.txt");
+    }
+
+    #[test]
+    fn set_extension_ignores_target() {
+        let e = entry("a.JPG", "a", "JPG", 0);
+        let rules = vec![inst(
+            // 目标选的是文件名，这条规则照样只改扩展名
+            Target::Name,
+            Rule::SetExtension { ext: ".jpg".into() },
+        )];
+        assert_eq!(run(&e, &rules, 0), "a.jpg");
+    }
+
+    #[test]
+    fn set_extension_empty_removes_suffix() {
+        let e = entry("a.txt", "a", "txt", 0);
+        let rules = vec![inst(
+            Target::Extension,
+            Rule::SetExtension { ext: String::new() },
+        )];
+        assert_eq!(run(&e, &rules, 0), "a");
+    }
+
+    #[test]
+    fn normalize_separators_unifies() {
+        let e = entry("a b_c-d.e.txt", "a b_c-d.e", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::NormalizeSeparators {
+                to: "_".into(),
+                space: true,
+                underscore: true,
+                hyphen: true,
+                dot: true,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "a_b_c_d_e.txt");
+    }
+
+    #[test]
+    fn normalize_separators_drops_leading_sep() {
+        let e = entry("_ _a.txt", "_ _a", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::NormalizeSeparators {
+                to: "_".into(),
+                space: true,
+                underscore: true,
+                hyphen: true,
+                dot: true,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "a.txt");
+    }
+
+    #[test]
+    fn strip_affix_only_once() {
+        let e = entry("[站] 歌_v2.txt", "[站] 歌_v2", "txt", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::StripAffix {
+                prefix: "[站] ".into(),
+                suffix: "_v2".into(),
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "歌.txt");
+    }
+
+    #[test]
+    fn insert_time_prefix() {
+        let ts = 1_700_000_000_000i64;
+        let expected = Local
+            .timestamp_millis_opt(ts)
+            .single()
+            .unwrap()
+            .format("%Y%m%d")
+            .to_string();
+        let e = entry("a.txt", "a", "txt", ts);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::InsertTime {
+                source: TimeSource::Modified,
+                format: "yyyyMMdd".into(),
+                position: SeqPosition::Prefix,
+                separator: "_".into(),
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), format!("{expected}_a.txt"));
     }
 }

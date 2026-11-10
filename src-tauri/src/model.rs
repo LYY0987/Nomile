@@ -14,6 +14,15 @@ fn d_step() -> u64 {
 fn d_pad() -> u8 {
     0
 }
+fn d_limit() -> usize {
+    60
+}
+fn d_sep() -> String {
+    "_".into()
+}
+fn d_stamp_fmt() -> String {
+    "yyyyMMdd".into()
+}
 
 // ---------------------------------------------------------------- 文件条目
 
@@ -173,6 +182,34 @@ pub enum SpaceMode {
     Collapse,
 }
 
+/// 区间截取：保留一段，还是删掉一段
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SliceMode {
+    #[default]
+    Keep,
+    Cut,
+}
+
+/// 超长时的截断方式：直接砍尾巴，还是中间留省略号
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LimitMode {
+    #[default]
+    Truncate,
+    Middle,
+}
+
+/// 插入时间戳的取值来源
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TimeSource {
+    #[default]
+    Modified,
+    Created,
+    Now,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Rule {
@@ -223,6 +260,79 @@ pub enum Rule {
         trim: bool,
         #[serde(default)]
         collapse_repeat: bool,
+    },
+    /// 按字符位置截取：下标 1 基，负数从末尾数，`end=0` 表示一直到末尾
+    Slice {
+        #[serde(default)]
+        start: i64,
+        #[serde(default)]
+        end: i64,
+        #[serde(default)]
+        mode: SliceMode,
+    },
+    /// 在第 `at` 个字符之前插入文本（负数从末尾数，0 与 1 都是开头）
+    Insert {
+        #[serde(default)]
+        at: i64,
+        text: String,
+    },
+    /// 删除成对括号（连同里面的内容）
+    RemoveBrackets {
+        #[serde(default = "d_true")]
+        round: bool,
+        #[serde(default = "d_true")]
+        square: bool,
+        #[serde(default = "d_true")]
+        curly: bool,
+        #[serde(default = "d_true")]
+        cjk: bool,
+        #[serde(default)]
+        keep_brackets: bool,
+    },
+    /// 去掉「 - 副本」「(2)」「 - copy」这类复制痕迹
+    StripCopyMarks {
+        #[serde(default = "d_true")]
+        trailing_number: bool,
+    },
+    /// 限制长度，超出部分截掉
+    LimitLength {
+        #[serde(default = "d_limit")]
+        max: usize,
+        #[serde(default)]
+        mode: LimitMode,
+    },
+    /// 直接设置扩展名（不看 target）
+    SetExtension { ext: String },
+    /// 把空格 / 下划线 / 连字符 / 点统一成一种分隔符
+    NormalizeSeparators {
+        #[serde(default = "d_sep")]
+        to: String,
+        #[serde(default = "d_true")]
+        space: bool,
+        #[serde(default = "d_true")]
+        underscore: bool,
+        #[serde(default = "d_true")]
+        hyphen: bool,
+        #[serde(default = "d_true")]
+        dot: bool,
+    },
+    /// 剥掉开头 / 结尾固定的一串字符
+    StripAffix {
+        #[serde(default)]
+        prefix: String,
+        #[serde(default)]
+        suffix: String,
+    },
+    /// 插入修改时间 / 创建时间 / 当前时间
+    InsertTime {
+        #[serde(default)]
+        source: TimeSource,
+        #[serde(default = "d_stamp_fmt")]
+        format: String,
+        #[serde(default)]
+        position: SeqPosition,
+        #[serde(default = "d_sep")]
+        separator: String,
     },
 }
 

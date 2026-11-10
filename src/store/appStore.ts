@@ -59,6 +59,44 @@ function createRule(kind: RuleKind): Rule {
         trim: true,
         collapseRepeat: false,
       };
+    case "slice":
+      return { kind: "slice", start: 1, end: 0, mode: "keep" };
+    case "insert":
+      return { kind: "insert", at: 1, text: "" };
+    case "removeBrackets":
+      return {
+        kind: "removeBrackets",
+        round: true,
+        square: true,
+        curly: true,
+        cjk: true,
+        keepBrackets: false,
+      };
+    case "stripCopyMarks":
+      return { kind: "stripCopyMarks", trailingNumber: true };
+    case "limitLength":
+      return { kind: "limitLength", max: 60, mode: "truncate" };
+    case "setExtension":
+      return { kind: "setExtension", ext: "" };
+    case "normalizeSeparators":
+      return {
+        kind: "normalizeSeparators",
+        to: "_",
+        space: true,
+        underscore: true,
+        hyphen: true,
+        dot: true,
+      };
+    case "stripAffix":
+      return { kind: "stripAffix", prefix: "", suffix: "" };
+    case "insertTime":
+      return {
+        kind: "insertTime",
+        source: "modified",
+        format: "yyyyMMdd",
+        position: "prefix",
+        separator: "_",
+      };
   }
 }
 
