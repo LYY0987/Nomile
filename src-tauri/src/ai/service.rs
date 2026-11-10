@@ -42,7 +42,7 @@ impl Default for AiConfig {
                 name: "Ollama 本地".into(),
                 kind: AiProviderKind::Ollama,
                 base_url: "http://localhost:11434".into(),
-                model: String::new(),
+                model: "qwen3.8".into(),
             }],
             active_id: "ollama".into(),
         }

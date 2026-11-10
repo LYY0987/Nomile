@@ -223,9 +223,10 @@ export function AiSettings({ onClose }: { onClose: () => void }) {
               <input
                 className="input small"
                 value={form.name}
-                onChange={(event) =>
-                  setForm((f) => ({ ...f, name: event.currentTarget.value }))
-                }
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((f) => ({ ...f, name: value }));
+                }}
               />
             </div>
 
@@ -234,12 +235,11 @@ export function AiSettings({ onClose }: { onClose: () => void }) {
               <select
                 className="input small"
                 value={form.kind}
-                onChange={(event) =>
-                  setForm((f) => ({
-                    ...f,
-                    kind: event.currentTarget.value as AiProviderConfig["kind"],
-                  }))
-                }
+                onChange={(event) => {
+                  const value = event.currentTarget
+                    .value as AiProviderConfig["kind"];
+                  setForm((f) => ({ ...f, kind: value }));
+                }}
               >
                 <option value="ollama">Ollama</option>
                 <option value="openai">OpenAI 兼容</option>
@@ -252,9 +252,10 @@ export function AiSettings({ onClose }: { onClose: () => void }) {
                 className="input small mono"
                 value={form.baseUrl}
                 placeholder="https://api.example.com/v1"
-                onChange={(event) =>
-                  setForm((f) => ({ ...f, baseUrl: event.currentTarget.value }))
-                }
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((f) => ({ ...f, baseUrl: value }));
+                }}
               />
             </div>
 
@@ -263,10 +264,11 @@ export function AiSettings({ onClose }: { onClose: () => void }) {
               <input
                 className="input small mono"
                 value={form.model}
-                placeholder="如 qwen2.5:7b"
-                onChange={(event) =>
-                  setForm((f) => ({ ...f, model: event.currentTarget.value }))
-                }
+                placeholder="如 qwen3.8"
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((f) => ({ ...f, model: value }));
+                }}
               />
               <button
                 className="btn small"
@@ -285,9 +287,10 @@ export function AiSettings({ onClose }: { onClose: () => void }) {
                 <select
                   className="input small"
                   value={form.model}
-                  onChange={(event) =>
-                    setForm((f) => ({ ...f, model: event.currentTarget.value }))
-                  }
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setForm((f) => ({ ...f, model: value }));
+                  }}
                 >
                   <option value="">选择模型</option>
                   {modelOptions.map((model) => (
