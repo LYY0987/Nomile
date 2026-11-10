@@ -12,6 +12,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { ConflictPolicy, Issue, PlanItem, SortBy } from "../lib/types";
 import { useApp } from "../store/appStore";
@@ -56,26 +57,91 @@ function errorLabel(issue: Issue): string {
   }
 }
 
-function Highlight({
-  text,
-  start,
-  end,
-}: {
-  text: string;
-  start: number;
-  end: number;
-}) {
-  // Rust 返回的是 char 索引，必须按 code point 切，不能直接用 UTF-16 下标
-  const chars = Array.from(text);
-  if (start >= end || start < 0 || end > chars.length) return <>{text}</>;
+/**
+ * b 的每个字符能否按顺序在 a 里找到（允许 a 多出字符）
+ */
+function isSubsequence(a: string[], b: string[]): boolean {
+  let i = 0;
+  for (let j = 0; j < b.length; j += 1) {
+    while (i < a.length && a[i] !== b[j]) i += 1;
+    if (i >= a.length) return false;
+    i += 1;
+  }
+  return true;
+}
 
-  return (
-    <>
-      {chars.slice(0, start).join("")}
-      <mark>{chars.slice(start, end).join("")}</mark>
-      {chars.slice(end).join("")}
-    </>
+/**
+ * 算出新名里真正变化的区间，最多两段。
+ *
+ * 只算「公共前缀 + 公共后缀」会给出一整段：前缀和后缀同时改时，
+ * 中间那段原样保留的文字也被框进高亮里，看起来整个名字都变了。
+ * 所以再在中间段里找一次原有的名字，把它挖掉，拆成左右两段。
+ */
+function diffMarks(a: string, b: string): [number, number][] {
+  const ac = Array.from(a);
+  const bc = Array.from(b);
+
+  // 纯删除（新名只是原名的子序列）时新名里没有任何「新增」字符，
+  // 硬标一段会把保留下来的文字误标成新内容，所以干脆不标。
+  if (isSubsequence(ac, bc)) return [];
+
+  let p = 0;
+  const maxP = Math.min(ac.length, bc.length);
+  while (p < maxP && ac[p] === bc[p]) p += 1;
+
+  let s = 0;
+  const maxS = Math.min(ac.length, bc.length) - p;
+  while (s < maxS && ac[ac.length - 1 - s] === bc[bc.length - 1 - s]) s += 1;
+
+  const bStart = p;
+  const bEnd = bc.length - s;
+  if (bEnd <= bStart) return [];
+
+  const aMid = ac.slice(p, ac.length - s);
+  if (aMid.length > 0 && bEnd - bStart > aMid.length) {
+    const hay = bc.slice(bStart, bEnd);
+    for (let i = 0; i + aMid.length <= hay.length; i += 1) {
+      let hit = true;
+      for (let j = 0; j < aMid.length; j += 1) {
+        if (hay[i + j] !== aMid[j]) {
+          hit = false;
+          break;
+        }
+      }
+      if (!hit) continue;
+
+      const marks: [number, number][] = [];
+      if (i > 0) marks.push([bStart, bStart + i]);
+      const tailStart = bStart + i + aMid.length;
+      if (tailStart < bEnd) marks.push([tailStart, bEnd]);
+      return marks.length > 0 ? marks : [[bStart, bEnd]];
+    }
+  }
+
+  return [[bStart, bEnd]];
+}
+
+function Marked({ text, marks }: { text: string; marks: [number, number][] }) {
+  // Rust 的索引是 char 索引，必须按 code point 切，不能直接用 UTF-16 下标
+  const chars = Array.from(text);
+  const valid = marks.filter(
+    ([s, e]) => s >= 0 && e <= chars.length && s < e
   );
+  if (valid.length === 0) return <>{text}</>;
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  valid.forEach(([s, e], i) => {
+    if (s > cursor) {
+      nodes.push(<span key={`p${i}`}>{chars.slice(cursor, s).join("")}</span>);
+    }
+    nodes.push(<mark key={`m${i}`}>{chars.slice(s, e).join("")}</mark>);
+    cursor = e;
+  });
+  if (cursor < chars.length) {
+    nodes.push(<span key="tail">{chars.slice(cursor).join("")}</span>);
+  }
+  return <>{nodes}</>;
 }
 
 export function PreviewTable() {
@@ -299,10 +365,9 @@ export function PreviewTable() {
                       <span style={{ color: "var(--text-faint)" }}>—</span>
                     ) : item ? (
                       item.changed ? (
-                        <Highlight
+                        <Marked
                           text={item.dstName}
-                          start={item.diffStart}
-                          end={item.diffEnd}
+                          marks={diffMarks(item.srcName, item.dstName)}
                         />
                       ) : (
                         <span style={{ color: "var(--text-faint)" }}>

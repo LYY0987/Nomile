@@ -262,7 +262,7 @@ fn diff_span(a: &str, b: &str) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ConflictPolicy, Rule, Target};
+    use crate::model::{ConflictPolicy, Rule, SeqPosition, Target};
 
     fn entry(id: u64, name: &str) -> FileEntry {
         let (stem, ext) = name::split_full_name(name, false);
@@ -320,9 +320,30 @@ mod tests {
         assert_eq!(plan.items[0].dst_name, "n_a.txt");
     }
 
+    /// 生成的名字和原名完全一样时，不该报任何错误
     #[test]
-    fn duplicate_targets_are_errors() {
-        let entries = vec![entry(1, "a.txt"), entry(2, "b.txt")];
+    fn unchanged_result_has_no_issues() {
+        let entries = vec![entry(1, "001.txt")];
+        let rules = vec![inst(
+            "r1",
+            Rule::Sequence {
+                start: 1,
+                step: 1,
+                pad: 3,
+                position: SeqPosition::Replace,
+                separator: String::new(),
+            },
+        )];
+        let plan = build_plan(&entries, None, &rules, &no_file, ConflictPolicy::AutoSuffix);
+        assert_eq!(plan.items[0].dst_name, "001.txt");
+        assert!(!plan.items[0].changed);
+        assert!(plan.items[0].issues.is_empty(), "未改动不该有任何 issue");
+        assert_eq!(plan.errors, 0);
+        assert_eq!(plan.warnings, 0);
+    }
+
+    #[test]
+    fn duplicate_targets_are_errors() {        let entries = vec![entry(1, "a.txt"), entry(2, "b.txt")];
         let rules = vec![inst(
             "r1",
             Rule::Template {
