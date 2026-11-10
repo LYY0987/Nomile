@@ -1811,3 +1811,31 @@ mark {
 .spec-cond-list .spec-card {
   background: var(--panel);
 }
+
+.ai-map-dst {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+}
+.ai-map-dst input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11px;
+  outline: none;
+}
+.ai-map-dst input:focus {
+  text-decoration: underline;
+}
+.ai-map-ext {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+}

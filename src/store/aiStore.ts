@@ -53,6 +53,7 @@ interface AiState {
   cancel: () => Promise<void>;
   apply: () => void;
   applyContent: () => void;
+  updateContentEntry: (id: number, stem: string) => void;
   updateSpec: (spec: AiSchemeResult["spec"]) => void;
   loadSpec: (spec: AiSchemeResult["spec"], summary: string) => void;
   clearResult: () => void;
@@ -339,6 +340,19 @@ export const useAi = create<AiState>((set, get) => ({
     app.notify(`已应用 ${result.entries.length} 个按内容命名`, "ok");
   },
 
+  updateContentEntry: (id, stem) => {
+    const result = get().contentResult;
+    if (!result) return;
+    set({
+      contentResult: {
+        ...result,
+        entries: result.entries.map((entry) =>
+          entry.id === id ? { ...entry, stem } : entry
+        ),
+      },
+    });
+  },
+
   updateSpec: (spec) => {
     const result = get().result;
     if (!result) return;
@@ -384,14 +398,10 @@ export const useAi = create<AiState>((set, get) => ({
     const result = get().contentResult;
     const app = useApp.getState();
     if (result && app.aiMap) {
-      const same =
-        app.aiMap.length === result.entries.length &&
-        result.entries.every((entry) =>
-          app.aiMap?.some(
-            (item) => item.id === entry.id && item.stem === entry.stem
-          )
-        );
-      if (same) app.setAiMap(null);
+      const touches = result.entries.some((entry) =>
+        app.aiMap?.some((item) => item.id === entry.id)
+      );
+      if (touches) app.setAiMap(null);
     }
     set({ contentResult: null, streamText: "", error: null, status: "" });
   },

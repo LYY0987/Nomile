@@ -25,6 +25,11 @@ function withExt(srcName: string, stem: string): string {
   return dot > 0 ? `${stem}${srcName.slice(dot)}` : stem;
 }
 
+function extOf(srcName: string): string {
+  const dot = srcName.lastIndexOf(".");
+  return dot > 0 ? srcName.slice(dot) : "";
+}
+
 function mappingKey(entry: AiMapResultEntry): string {
   return `${entry.id}|${entry.stem}`;
 }
@@ -47,6 +52,7 @@ export function AiContentPanel() {
   const generateContent = useAi((s) => s.generateContent);
   const cancel = useAi((s) => s.cancel);
   const applyContent = useAi((s) => s.applyContent);
+  const updateContentEntry = useAi((s) => s.updateContentEntry);
   const clearContent = useAi((s) => s.clearContent);
 
   const active = providers.find((p) => p.id === activeId);
@@ -113,7 +119,7 @@ export function AiContentPanel() {
             允许读取选中文件的文本内容（最多 30 个，每个约 6KB）
           </label>
           <div className="ai-settings-hint">
-            支持文本、PDF、DOCX、PPTX；图片、音视频、XLSX 表格不会读取。内容只用于本次请求，AI 只返回文件名，不会修改文件。
+            支持文本、PDF、DOCX、PPTX、XLSX/XLS；图片、音视频、旧版 DOC/PPT 不会读取。内容只用于本次请求，AI 只返回文件名，不会修改文件。
           </div>
         </div>
 
@@ -178,7 +184,7 @@ export function AiContentPanel() {
 
           <div className="ai-map-list">
             {contentResult.entries.map((entry) => (
-              <div className="ai-map-row" key={mappingKey(entry)}>
+              <div className="ai-map-row" key={entry.id}>
                 <span className="ai-map-src" title={entry.srcName}>
                   {entry.srcName}
                 </span>
@@ -187,10 +193,20 @@ export function AiContentPanel() {
                   className="ai-map-dst"
                   title={withExt(entry.srcName, entry.stem)}
                 >
-                  {withExt(entry.srcName, entry.stem)}
+                  <input
+                    value={entry.stem}
+                    spellCheck={false}
+                    onChange={(event) =>
+                      updateContentEntry(entry.id, event.currentTarget.value)
+                    }
+                  />
+                  <span className="ai-map-ext">{extOf(entry.srcName)}</span>
                 </span>
               </div>
             ))}
+          </div>
+          <div className="ai-settings-hint">
+            新名字可以直接修改，改完再点「应用到预览」。
           </div>
 
           {contentResult.skipped.length > 0 && (

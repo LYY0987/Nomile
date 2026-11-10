@@ -1,11 +1,13 @@
 //! 按内容命名时读取内容摘要。
 //!
-//! 文本文件直接读；PDF / DOCX / PPTX 提取文字后截断。
+//! 文本文件直接读；PDF / DOCX / PPTX / XLSX 提取文字后截断。
 //! 统一限制大小，避免把大文件或二进制塞进模型。
 
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+use calamine::Reader;
 
 const TEXT_EXTS: &[&str] = &[
     "txt", "md", "markdown", "csv", "tsv", "json", "yaml", "yml", "xml", "html", "htm", "css",
@@ -28,7 +30,11 @@ pub struct Snippet {
 
 pub fn supports(ext: &str) -> bool {
     let ext = ext.to_ascii_lowercase();
-    TEXT_EXTS.contains(&ext.as_str()) || matches!(ext.as_str(), "pdf" | "docx" | "pptx")
+    TEXT_EXTS.contains(&ext.as_str())
+        || matches!(
+            ext.as_str(),
+            "pdf" | "docx" | "pptx" | "xlsx" | "xls" | "xlsm" | "xlsb" | "ods"
+        )
 }
 
 /// 读取内容摘要。返回 None 表示不适合读内容（过大、二进制、空文件）。
@@ -45,6 +51,7 @@ pub fn read_snippet(path: &Path, max_chars: usize) -> Result<Option<Snippet>, St
         "pptx" => read_zip_text(path, |name| {
             name.starts_with("ppt/slides/slide") && name.ends_with(".xml")
         })?,
+        "xlsx" | "xls" | "xlsm" | "xlsb" | "ods" => read_spreadsheet(path)?,
         _ if TEXT_EXTS.contains(&ext.as_str()) => read_plain(path)?,
         _ => None,
     };
@@ -100,6 +107,49 @@ fn read_pdf(path: &Path) -> Result<Option<String>, String> {
     pdf_extract::extract_text(path)
         .map(Some)
         .map_err(|e| format!("PDF 解析失败：{e}"))
+}
+
+fn read_spreadsheet(path: &Path) -> Result<Option<String>, String> {
+    let size = file_size(path)?;
+    if size == 0 || size > MAX_ZIP_BYTES {
+        return Ok(None);
+    }
+
+    let mut workbook =
+        calamine::open_workbook_auto(path).map_err(|e| format!("表格解析失败：{e}"))?;
+    let sheets: Vec<String> = workbook
+        .sheet_names()
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+
+    let mut out = String::new();
+    for sheet in sheets.iter().take(3) {
+        let Ok(range) = workbook.worksheet_range(sheet) else {
+            continue;
+        };
+        for row in range.rows().take(50) {
+            let cells: Vec<String> = row
+                .iter()
+                .take(20)
+                .map(|cell| cell.to_string())
+                .filter(|value| !value.trim().is_empty())
+                .collect();
+            if !cells.is_empty() {
+                out.push_str(&cells.join(" "));
+                out.push('\n');
+            }
+        }
+        if out.chars().count() > MAX_CHARS * 2 {
+            break;
+        }
+    }
+
+    Ok(if out.trim().is_empty() {
+        None
+    } else {
+        Some(out)
+    })
 }
 
 fn read_zip_text<F>(path: &Path, matches: F) -> Result<Option<String>, String>
@@ -250,8 +300,11 @@ mod tests {
         assert!(supports("pdf"));
         assert!(supports("docx"));
         assert!(supports("pptx"));
+        assert!(supports("xlsx"));
+        assert!(supports("xls"));
+        assert!(supports("ods"));
         assert!(!supports("jpg"));
         assert!(!supports("doc"));
-        assert!(!supports("xlsx"));
+        assert!(!supports("ppt"));
     }
 }
