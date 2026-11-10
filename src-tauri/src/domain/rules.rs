@@ -1487,4 +1487,29 @@ mod tests {
         )];
         assert_eq!(run(&e, &rules, 0), format!("{expected}_a.txt"));
     }
+
+    /// 前端手写 JSON，字段名对不上只会在运行时炸——这里把 9 条新规则的
+    /// 实际报文钉住，改后端字段名必须同步改前端并改这里。
+    #[test]
+    fn accepts_frontend_json_for_new_rules() {
+        let json = r#"[
+          {"id":"a","target":"name","rule":{"kind":"slice","start":5,"end":12,"mode":"keep"}},
+          {"id":"b","target":"name","rule":{"kind":"insert","at":4,"text":"XX"}},
+          {"id":"c","target":"name","rule":{"kind":"removeBrackets","round":true,"square":true,"curly":true,"cjk":true,"keepBrackets":false}},
+          {"id":"d","target":"name","rule":{"kind":"stripCopyMarks","trailingNumber":true}},
+          {"id":"e","target":"name","rule":{"kind":"limitLength","max":5,"mode":"middle"}},
+          {"id":"f","target":"extension","rule":{"kind":"setExtension","ext":"jpg"}},
+          {"id":"g","target":"name","rule":{"kind":"normalizeSeparators","to":"_","space":true,"underscore":true,"hyphen":true,"dot":true}},
+          {"id":"h","target":"name","rule":{"kind":"stripAffix","prefix":"[站] ","suffix":"_v2"}},
+          {"id":"i","target":"name","rule":{"kind":"insertTime","source":"now","format":"yyyyMMdd","position":"prefix","separator":"_"}}
+        ]"#;
+
+        let parsed: Vec<RuleInstance> =
+            serde_json::from_str(json).expect("前端报文必须能反序列化成规则栈");
+        assert_eq!(parsed.len(), 9);
+        assert!(parsed.iter().all(|r| r.enabled), "enabled 缺省应为 true");
+
+        let e = entry("IMG_20230101_120000.jpg", "IMG_20230101_120000", "jpg", 0);
+        assert_eq!(run(&e, &parsed[..1], 0), "20230101.jpg");
+    }
 }
