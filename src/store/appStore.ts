@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { api, errorText } from "../lib/ipc";
 import type {
+  AiMapEntry,
   AiSpec,
   ConflictPolicy,
   FileEntry,
@@ -109,6 +110,8 @@ function createRule(kind: RuleKind): Rule {
           fallback: { onEmpty: "keepOriginal" },
         },
       };
+    case "aiMap":
+      return { kind: "aiMap", entries: [] };
   }
 }
 
@@ -175,9 +178,20 @@ export type PanelMode = "rules" | "ai";
 function activeRules(state: {
   panelMode: PanelMode;
   aiSpec: AiSpec | null;
+  aiMap: AiMapEntry[] | null;
   rules: RuleInstance[];
 }): RuleInstance[] {
   if (state.panelMode !== "ai") return state.rules;
+  if (state.aiMap && state.aiMap.length > 0) {
+    return [
+      {
+        id: "ai-map",
+        enabled: true,
+        target: "name",
+        rule: { kind: "aiMap", entries: state.aiMap },
+      },
+    ];
+  }
   if (!state.aiSpec) return [];
   return [
     {
@@ -205,6 +219,8 @@ interface AppState {
   panelMode: PanelMode;
   /** AI 面板最近应用的方案；手动规则不受影响 */
   aiSpec: AiSpec | null;
+  /** AI 按内容命名产生的逐文件映射 */
+  aiMap: AiMapEntry[] | null;
   plan: PreviewResult | null;
   policy: ConflictPolicy;
   options: ScanOptions;
@@ -245,6 +261,7 @@ interface AppState {
   setRules: (rules: RuleInstance[]) => void;
   setPanelMode: (mode: PanelMode) => void;
   setAiSpec: (spec: AiSpec | null) => void;
+  setAiMap: (entries: AiMapEntry[] | null) => void;
 
   toggleSelect: (id: number) => void;
   /** ids 为空时作用于整个列表；传了候选集合就只在该集合内操作 */
@@ -261,6 +278,7 @@ interface AppState {
   toggleHistory: (open?: boolean) => Promise<void>;
   loadPresets: () => Promise<void>;
   savePreset: (name: string) => Promise<void>;
+  saveAiPreset: (name: string, spec: AiSpec) => Promise<void>;
   applyPreset: (id: string) => void;
   deletePreset: (id: string) => Promise<void>;
 
@@ -280,6 +298,7 @@ export const useApp = create<AppState>((set, get) => ({
   rules: [],
   panelMode: "rules",
   aiSpec: null,
+  aiMap: null,
   plan: null,
   policy: "autoSuffix",
   options: {
@@ -436,7 +455,8 @@ export const useApp = create<AppState>((set, get) => ({
   clearRules: () => set({ rules: [] }),
   setRules: (rules) => set({ rules }),
   setPanelMode: (panelMode) => set({ panelMode }),
-  setAiSpec: (aiSpec) => set({ aiSpec }),
+  setAiSpec: (aiSpec) => set({ aiSpec, aiMap: null }),
+  setAiMap: (aiMap) => set({ aiMap, aiSpec: null }),
 
   toggleSelect: (id) =>
     set((s) => ({
@@ -658,6 +678,30 @@ export const useApp = create<AppState>((set, get) => ({
     if (!preset) return;
     set({ rules: preset.rules.map((r) => ({ ...r, id: newRuleId() })) });
     get().notify(`已应用预设「${preset.name}」`, "ok");
+  },
+
+  saveAiPreset: async (name, spec) => {
+    const preset: Preset = {
+      id: `p${Date.now().toString(36)}`,
+      name,
+      rules: [
+        {
+          id: `ai-${Date.now().toString(36)}`,
+          enabled: true,
+          target: "name",
+          rule: { kind: "ai", spec },
+        },
+      ],
+      created: Date.now(),
+    };
+    const presets = [...get().presets, preset];
+    set({ presets });
+    try {
+      await api.savePresets({ presets });
+      get().notify(`已保存 AI 预设「${name}」`, "ok");
+    } catch (e) {
+      get().notify(errorText(e), "err");
+    }
   },
 
   deletePreset: async (id) => {

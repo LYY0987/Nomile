@@ -7,6 +7,7 @@ import {
   CaseSensitive,
   Crop,
   Eraser,
+  FileText,
   FileType,
   ListOrdered,
   Replace,
@@ -37,6 +38,7 @@ export const KIND_LABEL: Record<RuleKind, string> = {
   stripAffix: "剥掉固定前后缀",
   insertTime: "插入时间",
   ai: "AI 命名方案",
+  aiMap: "AI 按内容命名",
 };
 
 export const KIND_DESC: Record<RuleKind, string> = {
@@ -56,6 +58,7 @@ export const KIND_DESC: Record<RuleKind, string> = {
   stripAffix: "精确剥掉开头或结尾的固定文字",
   insertTime: "按修改 / 创建 / 当前时间加时间戳",
   ai: "由自然语言生成的母模板方案",
+  aiMap: "读取文本内容后逐文件起名",
 };
 
 /** 每类规则配一个图标，扫一眼就能分辨 */
@@ -76,6 +79,7 @@ export const KIND_ICON: Record<RuleKind, typeof Replace> = {
   stripAffix: Crop,
   insertTime: CalendarClock,
   ai: Bot,
+  aiMap: FileText,
 };
 
 /** 底部快捷区只放这 6 个最常用的 */

@@ -2,6 +2,7 @@
 
 pub mod commands;
 
+mod content;
 mod parse;
 mod prompt;
 mod provider;

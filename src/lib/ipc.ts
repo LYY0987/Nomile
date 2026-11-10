@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   AiGenerateRequest,
+  AiMapRequest,
+  AiMapResult,
   AiProviderConfig,
   AiProvidersView,
   AiSchemeResult,
@@ -67,6 +69,9 @@ export const api = {
 
   aiGenerate: (req: AiGenerateRequest) =>
     invoke<AiSchemeResult>("ai_generate", { req }),
+
+  aiGenerateMap: (req: AiMapRequest) =>
+    invoke<AiMapResult>("ai_generate_map", { req }),
 
   aiCancel: () => invoke<void>("ai_cancel"),
 };

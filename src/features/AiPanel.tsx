@@ -4,55 +4,23 @@ import {
   Check,
   Loader,
   RefreshCw,
+  Save,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Square,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type {
-  AiDateSource,
-  AiField,
-  AiMetaKey,
-  AiSegment,
-  AiSpec,
-  AiTransform,
-  RuleInstance,
-} from "../lib/types";
+import type { AiSpec, RuleInstance } from "../lib/types";
 import { useAi } from "../store/aiStore";
 import { useApp } from "../store/appStore";
+import { segmentLabel, transformLabel } from "./aiSpecLabels";
+import { AiContentPanel } from "./AiContentPanel";
 import { AiSettings } from "./AiSettings";
+import { AiSpecEditor } from "./AiSpecEditor";
 import { ModeSwitch } from "./ModeSwitch";
-
-const FIELD_LABEL: Record<AiField, string> = {
-  stem: "原文件名",
-  parent: "父目录",
-  size: "大小",
-  index: "序号",
-  total: "总数",
-};
-
-const DATE_LABEL: Record<AiDateSource, string> = {
-  modified: "修改时间",
-  created: "创建时间",
-  now: "当前时间",
-  shot: "拍摄时间",
-};
-
-const META_LABEL: Record<AiMetaKey, string> = {
-  camera: "相机",
-  make: "厂商",
-  model: "型号",
-  lens: "镜头",
-  title: "标题",
-  artist: "艺术家",
-  album: "专辑",
-  track: "曲目",
-  duration: "时长",
-  width: "宽度",
-  height: "高度",
-};
 
 const EXAMPLES = [
   "照片按拍摄时间 + 3 位序号",
@@ -60,54 +28,6 @@ const EXAMPLES = [
   "全小写，空格换下划线",
   "视频用标题，其他保持原名",
 ];
-
-function segmentLabel(segment: AiSegment): string {
-  switch (segment.type) {
-    case "literal":
-      return segment.text === " " ? "␣" : segment.text || "∅";
-    case "field":
-      return FIELD_LABEL[segment.field];
-    case "sequence":
-      return segment.pad > 0 ? `序号 ${segment.pad} 位` : "序号";
-    case "date":
-      return DATE_LABEL[segment.source];
-    case "meta":
-      return META_LABEL[segment.key];
-    case "extract":
-      return `提取 ${segment.pattern}`;
-    case "condition":
-      return "条件分支";
-    case "random":
-      return `随机 ${segment.len} 位`;
-  }
-}
-
-function transformLabel(transform: AiTransform): string {
-  switch (transform.type) {
-    case "replace":
-      return `替换「${transform.pattern}」`;
-    case "stripPrefix":
-      return `删前缀「${transform.value}」`;
-    case "stripSuffix":
-      return `删后缀「${transform.value}」`;
-    case "removeBrackets":
-      return "删括号内容";
-    case "stripCopyMarks":
-      return "去副本标记";
-    case "slice":
-      return `截取 ${transform.start}~${transform.end || "末"}`;
-    case "case":
-      return { lower: "转小写", upper: "转大写", title: "首字母大写", sentence: "句首大写" }[
-        transform.mode
-      ];
-    case "cleanup":
-      return "清理字符";
-    case "normalizeSeparators":
-      return `统一分隔符「${transform.to}」`;
-    case "limit":
-      return `限长 ${transform.max}`;
-  }
-}
 
 function extLabel(spec: AiSpec): string {
   switch (spec.extension.mode) {
@@ -126,8 +46,10 @@ export function AiPanel() {
   const sessionId = useApp((s) => s.sessionId);
   const aiSpec = useApp((s) => s.aiSpec);
   const rules = useApp((s) => s.rules);
+  const presets = useApp((s) => s.presets);
   const setRules = useApp((s) => s.setRules);
   const setPanelMode = useApp((s) => s.setPanelMode);
+  const saveAiPreset = useApp((s) => s.saveAiPreset);
   const notify = useApp((s) => s.notify);
 
   const providers = useAi((s) => s.providers);
@@ -139,13 +61,21 @@ export function AiPanel() {
   const result = useAi((s) => s.result);
   const draft = useAi((s) => s.draft);
   const setDraft = useAi((s) => s.setDraft);
+  const aiMode = useAi((s) => s.aiMode);
+  const setAiMode = useAi((s) => s.setAiMode);
   const loadProviders = useAi((s) => s.loadProviders);
   const generate = useAi((s) => s.generate);
   const cancel = useAi((s) => s.cancel);
   const apply = useAi((s) => s.apply);
+  const updateSpec = useAi((s) => s.updateSpec);
+  const loadSpec = useAi((s) => s.loadSpec);
   const clearResult = useAi((s) => s.clearResult);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [presetPick, setPresetPick] = useState("");
 
   useEffect(() => {
     void loadProviders();
@@ -154,6 +84,26 @@ export function AiPanel() {
   const active = providers.find((p) => p.id === activeId);
   const applied = !!result && aiSpec === result.spec;
   const canGenerate = !!sessionId && draft.trim().length > 0 && !generating;
+  const aiPresets = presets.filter((preset) =>
+    preset.rules.some((rule) => rule.rule.kind === "ai")
+  );
+
+  function applyAiPreset(id: string) {
+    setPresetPick("");
+    const preset = aiPresets.find((p) => p.id === id);
+    if (!preset) return;
+    const rule = preset.rules.find((r) => r.rule.kind === "ai");
+    if (!rule || rule.rule.kind !== "ai") return;
+    loadSpec(rule.rule.spec, `预设：${preset.name}`);
+  }
+
+  async function savePresetNow() {
+    if (!result) return;
+    const name = presetName.trim() || `AI 方案 ${aiPresets.length + 1}`;
+    await saveAiPreset(name, result.spec);
+    setPresetName("");
+    setPresetOpen(false);
+  }
 
   function addToStack() {
     if (!result) return;
@@ -185,7 +135,47 @@ export function AiPanel() {
         </button>
       </div>
 
-      <div className="ai-scroll">
+      <div className="ai-mode-switch">
+        <button
+          className={aiMode === "template" ? "is-active" : ""}
+          onClick={() => {
+            setAiMode("template");
+            setEditing(false);
+          }}
+        >
+          规则命名
+        </button>
+        <button
+          className={aiMode === "content" ? "is-active" : ""}
+          onClick={() => {
+            setAiMode("content");
+            setEditing(false);
+          }}
+        >
+          按内容命名
+        </button>
+      </div>
+
+      {aiMode === "template" ? (
+        <div className="ai-scroll">
+        {aiPresets.length > 0 && (
+          <div className="ai-preset-row">
+            <span className="ai-preset-label">我的 AI 预设</span>
+            <select
+              className="input small"
+              value={presetPick}
+              onChange={(event) => applyAiPreset(event.currentTarget.value)}
+            >
+              <option value="">选择预设…</option>
+              {aiPresets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {!sessionId && (
           <div className="ai-hint">
             先在上方载入一个目录或一批文件，AI 才能参考文件名生成方案。
@@ -340,6 +330,22 @@ export function AiPanel() {
               </button>
               <button
                 className="btn"
+                onClick={() => setEditing(true)}
+                title="直接修改母模板槽位"
+              >
+                <SlidersHorizontal />
+                编辑槽位
+              </button>
+              <button
+                className="btn"
+                onClick={() => setPresetOpen((open) => !open)}
+                title="把当前 AI 方案保存为可复用预设"
+              >
+                <Save />
+                存为预设
+              </button>
+              <button
+                className="btn"
                 onClick={addToStack}
                 title="把这条 AI 方案放进手动规则栈"
               >
@@ -350,11 +356,45 @@ export function AiPanel() {
                 移除方案
               </button>
             </div>
+
+            {presetOpen && (
+              <div className="ai-save-preset">
+                <input
+                  className="input small"
+                  placeholder="预设名称"
+                  value={presetName}
+                  onChange={(event) => setPresetName(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void savePresetNow();
+                  }}
+                />
+                <button
+                  className="btn small"
+                  onClick={() => void savePresetNow()}
+                >
+                  <Save />
+                  保存
+                </button>
+              </div>
+            )}
           </div>
         )}
-      </div>
+        </div>
+      ) : (
+        <AiContentPanel />
+      )}
 
       {settingsOpen && <AiSettings onClose={() => setSettingsOpen(false)} />}
+      {editing && result && (
+        <AiSpecEditor
+          spec={result.spec}
+          onSave={(spec) => {
+            updateSpec(spec);
+            setEditing(false);
+          }}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </div>
   );
 }

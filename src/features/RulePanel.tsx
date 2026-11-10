@@ -225,7 +225,8 @@ function RuleCard({
       <div className="rule-body">
         {inst.rule.kind !== "template" &&
           inst.rule.kind !== "setExtension" &&
-          inst.rule.kind !== "ai" && (
+          inst.rule.kind !== "ai" &&
+          inst.rule.kind !== "aiMap" && (
             <div className="field">
               <span className="label">作用于</span>
               <select
@@ -243,9 +244,11 @@ function RuleCard({
             </div>
           )}
 
-        {inst.rule.kind === "ai" && (
+        {(inst.rule.kind === "ai" || inst.rule.kind === "aiMap") && (
           <div className="rule-hint">
-            这是 AI 生成的母模板方案。切到「AI 重命名」可以继续调整或重新生成。
+            {inst.rule.kind === "ai"
+              ? "这是 AI 生成的母模板方案。切到「AI 重命名」可以继续调整或重新生成。"
+              : "这是 AI 按内容生成的逐文件名字。切到「AI 重命名」可以重新生成。"}
           </div>
         )}
 

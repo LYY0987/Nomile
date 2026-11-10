@@ -63,6 +63,7 @@ pub fn run() {
             ai::commands::ai_list_models,
             ai::commands::ai_test_provider,
             ai::commands::ai_generate,
+            ai::commands::ai_generate_map,
             ai::commands::ai_cancel,
         ])
         .run(tauri::generate_context!())

@@ -84,6 +84,14 @@ pub fn apply_stack(ctx: &RuleContext<'_>, rules: &[RuleInstance]) -> Result<Name
             continue;
         }
 
+        if let Rule::AiMap { entries } = &inst.rule {
+            if let Some(mapped) = entries.iter().find(|entry| entry.id == ctx.entry.id) {
+                parts.stem = normalize_nfc(&mapped.stem);
+                parts.ext = normalize_nfc(&parts.ext);
+            }
+            continue;
+        }
+
         if let Rule::Template { pattern } = &inst.rule {
             let rendered = render_template(
                 pattern,
@@ -179,6 +187,8 @@ pub(crate) fn apply_one(rule: &Rule, ctx: &RuleContext<'_>, input: &str) -> Resu
         Rule::SetExtension { .. } => input.to_string(),
         // Ai 在 apply_stack 里单独处理
         Rule::Ai { .. } => input.to_string(),
+        // AiMap 在 apply_stack 里单独处理
+        Rule::AiMap { .. } => input.to_string(),
     })
 }
 

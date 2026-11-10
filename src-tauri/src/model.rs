@@ -435,6 +435,11 @@ pub enum Rule {
     },
     /// AI 母模板：由自然语言提取的槽位生成主体名
     Ai { spec: AiSpec },
+    /// AI 按内容命名：逐文件指定新的主体名
+    AiMap {
+        #[serde(default)]
+        entries: Vec<AiMapEntry>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -735,6 +740,15 @@ impl Default for AiSpec {
             fallback: AiFallback::default(),
         }
     }
+}
+
+/// 按内容命名时，一个文件对应的新主体名
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiMapEntry {
+    pub id: u64,
+    /// 不含扩展名；扩展名沿用原文件
+    pub stem: String,
 }
 
 // ---------------------------------------------------------------- 预览 / 计划

@@ -203,7 +203,8 @@ export type Rule =
   | NormalizeSeparatorsRule
   | StripAffixRule
   | InsertTimeRule
-  | AiRule;
+  | AiRule
+  | AiMapRule;
 
 export type RuleKind = Rule["kind"];
 
@@ -458,6 +459,16 @@ export interface AiRule {
   spec: AiSpec;
 }
 
+export interface AiMapEntry {
+  id: number;
+  stem: string;
+}
+
+export interface AiMapRule {
+  kind: "aiMap";
+  entries: AiMapEntry[];
+}
+
 export interface AiGenerateRequest {
   requestId: string;
   prompt: string;
@@ -471,4 +482,33 @@ export interface AiSchemeResult {
   spec: AiSpec;
   assumptions: string[];
   unsupported: string[];
+}
+
+export interface AiMapRequest {
+  requestId: string;
+  prompt: string;
+  sessionId?: string | null;
+  ids?: number[] | null;
+  providerId?: string | null;
+  allowContent: boolean;
+  maxFiles?: number;
+}
+
+export interface AiMapResultEntry {
+  id: number;
+  srcName: string;
+  stem: string;
+}
+
+export interface AiMapSkipped {
+  name: string;
+  reason: string;
+}
+
+export interface AiMapResult {
+  summary: string;
+  entries: AiMapResultEntry[];
+  assumptions: string[];
+  unsupported: string[];
+  skipped: AiMapSkipped[];
 }

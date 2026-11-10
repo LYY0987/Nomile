@@ -3,6 +3,7 @@ import { create } from "zustand";
 
 import { api, errorText } from "../lib/ipc";
 import type {
+  AiMapResult,
   AiProviderConfig,
   AiProviderView,
   AiSchemeResult,
@@ -29,8 +30,16 @@ interface AiState {
   result: AiSchemeResult | null;
   /** 输入框草稿，切换面板后不丢 */
   draft: string;
+  /** 规则命名 / 按内容命名 */
+  aiMode: "template" | "content";
+  contentDraft: string;
+  allowContent: boolean;
+  contentResult: AiMapResult | null;
 
   setDraft: (draft: string) => void;
+  setAiMode: (mode: "template" | "content") => void;
+  setContentDraft: (draft: string) => void;
+  setAllowContent: (allow: boolean) => void;
   loadProviders: () => Promise<void>;
   saveProvider: (provider: AiProviderConfig) => Promise<boolean>;
   deleteProvider: (providerId: string) => Promise<void>;
@@ -40,9 +49,14 @@ interface AiState {
   loadModels: (providerId?: string | null) => Promise<string[]>;
   testProvider: (providerId?: string | null) => Promise<string | null>;
   generate: (prompt: string) => Promise<void>;
+  generateContent: (prompt: string) => Promise<void>;
   cancel: () => Promise<void>;
   apply: () => void;
+  applyContent: () => void;
+  updateSpec: (spec: AiSchemeResult["spec"]) => void;
+  loadSpec: (spec: AiSchemeResult["spec"], summary: string) => void;
   clearResult: () => void;
+  clearContent: () => void;
 }
 
 export const useAi = create<AiState>((set, get) => ({
@@ -54,8 +68,15 @@ export const useAi = create<AiState>((set, get) => ({
   error: null,
   result: null,
   draft: "",
+  aiMode: "template",
+  contentDraft: "",
+  allowContent: false,
+  contentResult: null,
 
   setDraft: (draft) => set({ draft }),
+  setAiMode: (aiMode) => set({ aiMode }),
+  setContentDraft: (contentDraft) => set({ contentDraft }),
+  setAllowContent: (allowContent) => set({ allowContent }),
 
   loadProviders: async () => {
     try {
@@ -218,13 +239,135 @@ export const useAi = create<AiState>((set, get) => ({
     }
   },
 
+  generateContent: async (prompt) => {
+    const app = useApp.getState();
+    if (!app.sessionId) {
+      app.notify("请先载入文件列表，AI 需要读取文件内容", "err");
+      return;
+    }
+
+    const provider = get().providers.find((p) => p.id === get().activeId);
+    if (!provider) {
+      app.notify("还没有配置 AI 服务", "err");
+      return;
+    }
+    if (!provider.model.trim()) {
+      app.notify("请先在 AI 设置里选择模型", "err");
+      return;
+    }
+    if (!get().allowContent) {
+      app.notify("请先勾选「允许读取文件内容」", "err");
+      return;
+    }
+
+    const requestId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `aim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+    set({
+      generating: true,
+      status: "正在读取文件内容…",
+      streamText: "",
+      error: null,
+      contentResult: null,
+    });
+
+    let offDelta = () => {};
+    let offStatus = () => {};
+    try {
+      offDelta = await listen<DeltaPayload>("ai:delta", (event) => {
+        if (event.payload.requestId !== requestId) return;
+        set((state) => {
+          const next = state.streamText + event.payload.text;
+          return { streamText: next.length > 6000 ? next.slice(-6000) : next };
+        });
+      });
+      offStatus = await listen<StatusPayload>("ai:status", (event) => {
+        if (event.payload.requestId === requestId) {
+          set({ status: event.payload.phase });
+        }
+      });
+    } catch {
+      // 事件通道不可用时仍然能拿到最终的 invoke 结果
+    }
+
+    try {
+      const ids = app.selected.length === app.entries.length ? null : app.selected;
+      const result = await api.aiGenerateMap({
+        requestId,
+        prompt: prompt.trim(),
+        sessionId: app.sessionId,
+        ids,
+        allowContent: true,
+        maxFiles: 30,
+      });
+      set({ contentResult: result, status: "名字已生成" });
+    } catch (e) {
+      const text = errorText(e);
+      if (text.includes("取消")) {
+        set({ status: "已取消" });
+      } else {
+        set({ error: text, status: "生成失败" });
+      }
+    } finally {
+      offDelta();
+      offStatus();
+      set({ generating: false });
+    }
+  },
+
   apply: () => {
     const result = get().result;
     if (!result) return;
     const app = useApp.getState();
     app.setAiSpec(result.spec);
     app.setPanelMode("ai");
+    set({ aiMode: "template" });
     app.notify("AI 方案已应用到预览", "ok");
+  },
+
+  applyContent: () => {
+    const result = get().contentResult;
+    if (!result) return;
+    const app = useApp.getState();
+    app.setAiMap(
+      result.entries.map((entry) => ({ id: entry.id, stem: entry.stem }))
+    );
+    app.setPanelMode("ai");
+    set({ aiMode: "content" });
+    app.notify(`已应用 ${result.entries.length} 个按内容命名`, "ok");
+  },
+
+  updateSpec: (spec) => {
+    const result = get().result;
+    if (!result) return;
+    set({ result: { ...result, spec } });
+    const app = useApp.getState();
+    app.setAiSpec(spec);
+    app.setPanelMode("ai");
+    set({ aiMode: "template" });
+    app.notify("AI 方案参数已更新", "ok");
+  },
+
+  loadSpec: (spec, summary) => {
+    const result: AiSchemeResult = {
+      summary,
+      spec,
+      assumptions: [],
+      unsupported: [],
+    };
+    set({
+      result,
+      status: "已载入预设",
+      error: null,
+      streamText: "",
+      aiMode: "template",
+    });
+    const app = useApp.getState();
+    app.setAiSpec(spec);
+    app.setPanelMode("ai");
+    app.notify("已载入 AI 预设", "ok");
   },
 
   clearResult: () => {
@@ -235,5 +378,21 @@ export const useAi = create<AiState>((set, get) => ({
       app.setAiSpec(null);
     }
     set({ result: null, streamText: "", error: null, status: "" });
+  },
+
+  clearContent: () => {
+    const result = get().contentResult;
+    const app = useApp.getState();
+    if (result && app.aiMap) {
+      const same =
+        app.aiMap.length === result.entries.length &&
+        result.entries.every((entry) =>
+          app.aiMap?.some(
+            (item) => item.id === entry.id && item.stem === entry.stem
+          )
+        );
+      if (same) app.setAiMap(null);
+    }
+    set({ contentResult: null, streamText: "", error: null, status: "" });
   },
 }));

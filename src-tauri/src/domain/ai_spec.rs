@@ -738,4 +738,22 @@ mod tests {
         let out = crate::domain::rules::apply_stack(&ctx(&e, 0), &[inst]).unwrap();
         assert_eq!(out.full(), "01.jpg");
     }
+
+    #[test]
+    fn ai_map_rule_replaces_stem_for_matching_entry() {
+        let e = entry("IMG_001.jpg");
+        let inst = RuleInstance {
+            id: "map".into(),
+            enabled: true,
+            target: Target::Name,
+            rule: Rule::AiMap {
+                entries: vec![crate::model::AiMapEntry {
+                    id: e.id,
+                    stem: "新的名字".into(),
+                }],
+            },
+        };
+        let out = crate::domain::rules::apply_stack(&ctx(&e, 0), &[inst]).unwrap();
+        assert_eq!(out.full(), "新的名字.jpg");
+    }
 }
