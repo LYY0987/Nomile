@@ -249,6 +249,9 @@ pub enum Rule {
         prefix: String,
         #[serde(default)]
         suffix: String,
+        /// 名字已经以这段文字开头/结尾时不再重复叠加，避免 `IMG` + `IMG_001` 变成 `IMGIMG_001`
+        #[serde(default = "d_true")]
+        skip_if_present: bool,
     },
     /// 清理：空白、非法字符、首尾、连续重复
     Cleanup {

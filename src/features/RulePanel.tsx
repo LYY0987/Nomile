@@ -436,6 +436,23 @@ function RuleCard({
                 onChange={(e) => patch({ suffix: e.currentTarget.value })}
               />
             </div>
+            <div className="field tight">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  // 旧预设里没有这个字段，按后端的默认值 true 显示
+                  checked={inst.rule.skipIfPresent !== false}
+                  onChange={(e) =>
+                    patch({ skipIfPresent: e.currentTarget.checked })
+                  }
+                />
+                名字已有这段文字就不再重复加
+              </label>
+            </div>
+            <div className="rule-hint">
+              勾上后，给「IMG_001」补前缀「IMG」不会变成「IMGIMG_001」；
+              想强制叠加就取消勾选。
+            </div>
           </>
         )}
 

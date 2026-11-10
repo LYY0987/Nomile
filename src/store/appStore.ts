@@ -50,7 +50,7 @@ function createRule(kind: RuleKind): Rule {
     case "case":
       return { kind: "case", mode: "lower" };
     case "affix":
-      return { kind: "affix", prefix: "", suffix: "" };
+      return { kind: "affix", prefix: "", suffix: "", skipIfPresent: true };
     case "cleanup":
       return {
         kind: "cleanup",

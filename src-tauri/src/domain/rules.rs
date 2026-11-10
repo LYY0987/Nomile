@@ -132,7 +132,11 @@ fn apply_one(rule: &Rule, ctx: &RuleContext<'_>, input: &str) -> Result<String, 
             separator,
         } => apply_sequence(*start, *step, *pad, *position, separator, ctx.index, input),
         Rule::Case { mode } => apply_case(*mode, input),
-        Rule::Affix { prefix, suffix } => format!("{prefix}{input}{suffix}"),
+        Rule::Affix {
+            prefix,
+            suffix,
+            skip_if_present,
+        } => apply_affix(prefix, suffix, *skip_if_present, input),
         Rule::Cleanup {
             spaces,
             strip_illegal,
@@ -259,6 +263,20 @@ fn to_sentence(input: &str) -> String {
         Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
         None => lowered,
     }
+}
+
+/// 加前后缀。`skip_if_present` 打开时，名字已经有这段文字就不再叠一遍——
+/// 这样给 `IMG_001` 补前缀 `IMG` 不会变成 `IMGIMG_001`。
+fn apply_affix(prefix: &str, suffix: &str, skip_if_present: bool, input: &str) -> String {
+    let mut s = input.to_string();
+
+    if !prefix.is_empty() && !(skip_if_present && s.starts_with(prefix)) {
+        s.insert_str(0, prefix);
+    }
+    if !suffix.is_empty() && !(skip_if_present && s.ends_with(suffix)) {
+        s.push_str(suffix);
+    }
+    s
 }
 
 fn apply_cleanup(
@@ -996,6 +1014,7 @@ mod tests {
             Rule::Affix {
                 prefix: "2023_".into(),
                 suffix: "_final".into(),
+                skip_if_present: false,
             },
         )];
         assert_eq!(run(&e, &rules, 0), "2023_a_final.txt");
@@ -1053,6 +1072,7 @@ mod tests {
                 Rule::Affix {
                     prefix: "x_".into(),
                     suffix: String::new(),
+                    skip_if_present: false,
                 },
             ),
             inst(
@@ -1235,10 +1255,67 @@ mod tests {
             Rule::Affix {
                 prefix: "x_".into(),
                 suffix: String::new(),
+                skip_if_present: false,
             },
         );
         r.enabled = false;
         assert_eq!(run(&e, &[r], 0), "a.txt");
+    }
+
+    #[test]
+    fn affix_skips_prefix_that_is_already_there() {
+        let e = entry("IMG_001.png", "IMG_001", "png", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Affix {
+                prefix: "IMG".into(),
+                suffix: String::new(),
+                skip_if_present: true,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "IMG_001.png");
+    }
+
+    /// 用户实际遇到的组合：前缀 IMG + 后缀序号，
+    /// 原文件名不该被新前缀顶到中间变成 IMGIMG_001_001
+    #[test]
+    fn affix_skip_keeps_original_name_at_front() {
+        let e = entry("IMG_001.png", "IMG_001", "png", 0);
+        let rules = vec![
+            inst(
+                Target::Name,
+                Rule::Affix {
+                    prefix: "IMG".into(),
+                    suffix: String::new(),
+                    skip_if_present: true,
+                },
+            ),
+            inst(
+                Target::Name,
+                Rule::Sequence {
+                    start: 1,
+                    step: 1,
+                    pad: 3,
+                    position: SeqPosition::Suffix,
+                    separator: "_".into(),
+                },
+            ),
+        ];
+        assert_eq!(run(&e, &rules, 0), "IMG_001_001.png");
+    }
+
+    #[test]
+    fn affix_skip_still_adds_when_missing() {
+        let e = entry("photo.png", "photo", "png", 0);
+        let rules = vec![inst(
+            Target::Name,
+            Rule::Affix {
+                prefix: "IMG_".into(),
+                suffix: String::new(),
+                skip_if_present: true,
+            },
+        )];
+        assert_eq!(run(&e, &rules, 0), "IMG_photo.png");
     }
 
     // ---- 位置类规则
