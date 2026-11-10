@@ -93,8 +93,6 @@ export interface AffixRule {
   kind: "affix";
   prefix: string;
   suffix: string;
-  /** 名字已经以这段文字开头/结尾时不再重复叠加 */
-  skipIfPresent: boolean;
 }
 
 export interface CleanupRule {

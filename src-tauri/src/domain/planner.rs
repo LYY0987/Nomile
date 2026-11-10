@@ -312,7 +312,6 @@ mod tests {
             Rule::Affix {
                 prefix: "n_".into(),
                 suffix: String::new(),
-                skip_if_present: false,
             },
         )];
         let plan = build_plan(&entries, None, &rules, &no_file, ConflictPolicy::AutoSuffix);
@@ -384,7 +383,6 @@ mod tests {
             Rule::Affix {
                 prefix: "x".into(),
                 suffix: String::new(),
-                skip_if_present: false,
             },
         )];
         let exists = |p: &Path| p.file_name().map(|n| n == "xa.txt").unwrap_or(false);
@@ -469,7 +467,6 @@ mod tests {
             Rule::Affix {
                 prefix: "x".into(),
                 suffix: String::new(),
-                skip_if_present: false,
             },
         )];
         let plan = build_plan(&entries, Some(&[1, 3]), &rules, &no_file, ConflictPolicy::AutoSuffix);
