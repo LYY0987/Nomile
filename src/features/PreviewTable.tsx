@@ -363,9 +363,7 @@ export function PreviewTable() {
         <span className="col">原文件名</span>
         <span />
         <span className="col">新文件名</span>
-        <span className="col col-kind" style={{ textAlign: "center" }}>
-          类型
-        </span>
+        <span className="col col-kind">类型</span>
         <span className="col">状态</span>
       </div>
 
@@ -428,10 +426,7 @@ export function PreviewTable() {
                       <span style={{ color: "var(--text-faint)" }}>—</span>
                     )}
                   </span>
-                  <span
-                    className="kind"
-                    style={{ display: "block", width: "100%", textAlign: "center" }}
-                  >
+                  <span className="kind">
                     <span className="kind-tag" data-kind={entry.kind}>
                       {KIND_LABEL[entry.kind] ?? entry.kind}
                     </span>

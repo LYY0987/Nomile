@@ -605,7 +605,8 @@ select.input {
   grid-template-columns: 30px minmax(0, 1fr) 14px minmax(0, 1fr) 72px 118px;
   gap: 8px;
   align-items: center;
-  padding: 0 12px;
+  /* 右侧多留一个滚动条宽度，和下方列表的列对齐，避免类型/状态列左右错位 */
+  padding: 0 22px 0 12px;
   height: 34px;
   border-bottom: 1px solid var(--border);
   background: var(--panel-alt);
@@ -627,6 +628,8 @@ select.input {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 始终预留滚动条位置，表头与列表才能共用同一套列宽 */
+  scrollbar-gutter: stable;
   position: relative;
   min-height: 0;
 }
