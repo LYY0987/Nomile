@@ -1117,3 +1117,95 @@ mark {
   font-size: 11px;
   color: var(--accent);
 }
+
+/* ---- 预设快捷选择 + 规则库左栏 */
+.preset-pick select {
+  width: 100%;
+}
+
+.lib-modal {
+  width: 780px;
+}
+.lib-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.lib-presets {
+  width: 212px;
+  flex: none;
+  border-right: 1px solid var(--border);
+  padding: 8px 10px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lib-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lib-empty {
+  padding: 8px 4px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-faint);
+}
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 4px 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+.preset-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+.preset-apply {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.preset-name {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-meta {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.preset-del {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.preset-del:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}

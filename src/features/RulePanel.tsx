@@ -48,7 +48,6 @@ export function RulePanel() {
   const presets = useApp((s) => s.presets);
   const savePreset = useApp((s) => s.savePreset);
   const applyPreset = useApp((s) => s.applyPreset);
-  const deletePreset = useApp((s) => s.deletePreset);
 
   const [presetName, setPresetName] = useState("");
   const [libOpen, setLibOpen] = useState(false);
@@ -114,6 +113,27 @@ export function RulePanel() {
           ))}
         </div>
 
+        {presets.length > 0 && (
+          <div className="preset-pick">
+            <select
+              className="input small"
+              value=""
+              title="快速应用已保存的预设，预设的增删在规则库里管"
+              onChange={(e) => {
+                const id = e.currentTarget.value;
+                if (id) applyPreset(id);
+              }}
+            >
+              <option value="">快捷选择预设…</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}（{p.rules.length} 条）
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="preset-bar">
           <input
             className="input small"
@@ -135,31 +155,6 @@ export function RulePanel() {
             存为预设
           </button>
         </div>
-
-        {presets.length > 0 && (
-          <div className="preset-list">
-            {presets.map((p) => (
-              <span className="chip" key={p.id}>
-                <button
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    color: "inherit",
-                    fontSize: 11,
-                  }}
-                  onClick={() => applyPreset(p.id)}
-                  title={`应用「${p.name}」`}
-                >
-                  {p.name}
-                </button>
-                <button onClick={() => void deletePreset(p.id)} title="删除">
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       {libOpen && <RuleLibrary open onClose={() => setLibOpen(false)} />}

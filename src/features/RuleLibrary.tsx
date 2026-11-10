@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+import { Library, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { RuleKind } from "../lib/types";
@@ -13,6 +13,10 @@ export function RuleLibrary({
   onClose: () => void;
 }) {
   const addRule = useApp((s) => s.addRule);
+  const presets = useApp((s) => s.presets);
+  const applyPreset = useApp((s) => s.applyPreset);
+  const deletePreset = useApp((s) => s.deletePreset);
+
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
 
@@ -33,67 +37,105 @@ export function RuleLibrary({
   return (
     <div className="modal-mask" onClick={onClose}>
       <div
-        className="modal"
+        className="modal lib-modal"
         onClick={(e) => {
           // 点卡片内部不要传到遮罩上，否则一选规则就被关掉
           e.stopPropagation();
         }}
       >
         <div className="modal-head">
+          <Library />
           <span className="panel-title">规则库</span>
-          <span className="panel-count">15 条</span>
+          <span className="panel-count">15 条规则</span>
           <div className="spacer" />
           <button className="btn icon" title="关闭" onClick={onClose}>
             <X />
           </button>
         </div>
 
-        <div className="search-box" style={{ margin: "10px 14px" }}>
-          <Search />
-          <input
-            placeholder="搜索规则，如 截取 / 括号 / 时间"
-            value={q}
-            onChange={(e) => setQ(e.currentTarget.value)}
-          />
-        </div>
+        <div className="lib-body">
+          <aside className="lib-presets">
+            <div className="lib-title">我的预设</div>
+            {presets.length === 0 && (
+              <div className="lib-empty">
+                还没有预设。
+                <br />
+                关闭这里，在规则区把当前规则栈「存为预设」，就会出现在这儿。
+              </div>
+            )}
+            {presets.map((p) => (
+              <div className="preset-item" key={p.id}>
+                <button
+                  className="preset-apply"
+                  title={`把规则栈换成「${p.name}」`}
+                  onClick={() => applyPreset(p.id)}
+                >
+                  <span className="preset-name">{p.name}</span>
+                  <span className="preset-meta">{p.rules.length} 条规则</span>
+                </button>
+                <button
+                  className="preset-del"
+                  title="删除预设"
+                  onClick={() => void deletePreset(p.id)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </aside>
 
-        <div className="modal-body">
-          {groups.map((group) => (
-            <div className="lib-group" key={group.title}>
-              <div className="lib-title">{group.title}</div>
-              {group.items.map((kind) => {
-                const Icon = KIND_ICON[kind];
-                return (
-                  <button
-                    key={kind}
-                    className="lib-item"
-                    onClick={() => addRule(kind as RuleKind)}
-                    title={`添加一条「${KIND_LABEL[kind]}」`}
-                  >
-                    <span className="lib-icon">
-                      <Icon />
-                    </span>
-                    <span className="lib-text">
-                      <span className="lib-name">{KIND_LABEL[kind]}</span>
-                      <span className="lib-desc">{KIND_DESC[kind]}</span>
-                    </span>
-                    <span className="lib-add">添加</span>
-                  </button>
-                );
-              })}
+          <div className="lib-main">
+            <div className="search-box" style={{ margin: "10px 14px" }}>
+              <Search />
+              <input
+                placeholder="搜索规则，如 截取 / 括号 / 时间"
+                value={q}
+                onChange={(e) => setQ(e.currentTarget.value)}
+              />
             </div>
-          ))}
 
-          {groups.length === 0 && (
-            <div className="empty" style={{ padding: "28px 8px" }}>
-              <div className="big">没有匹配的规则</div>
-              <div className="sub">换个词试试，比如「截取」「副本」「时间」</div>
+            <div className="modal-body">
+              {groups.map((group) => (
+                <div className="lib-group" key={group.title}>
+                  <div className="lib-title">{group.title}</div>
+                  {group.items.map((kind) => {
+                    const Icon = KIND_ICON[kind];
+                    return (
+                      <button
+                        key={kind}
+                        className="lib-item"
+                        onClick={() => addRule(kind as RuleKind)}
+                        title={`添加一条「${KIND_LABEL[kind]}」`}
+                      >
+                        <span className="lib-icon">
+                          <Icon />
+                        </span>
+                        <span className="lib-text">
+                          <span className="lib-name">{KIND_LABEL[kind]}</span>
+                          <span className="lib-desc">{KIND_DESC[kind]}</span>
+                        </span>
+                        <span className="lib-add">添加</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+
+              {groups.length === 0 && (
+                <div className="empty" style={{ padding: "28px 8px" }}>
+                  <div className="big">没有匹配的规则</div>
+                  <div className="sub">
+                    换个词试试，比如「截取」「副本」「时间」
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         <div className="modal-foot">
-          点「添加」会把规则放到栈尾，库不会关闭，可以连着挑几条再统一调参数。
+          点「添加」会把规则放到栈尾，库不会关闭，可以连着挑几条再统一调参数；
+          左侧点预设名会直接套用那套规则。
         </div>
       </div>
     </div>
