@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Bot,
   Check,
+  LayersPlus,
   Loader,
   RefreshCw,
   Save,
@@ -349,6 +350,7 @@ export function AiPanel() {
                 onClick={addToStack}
                 title="把这条 AI 方案放进手动规则栈"
               >
+                <LayersPlus />
                 加入规则栈
               </button>
               <button

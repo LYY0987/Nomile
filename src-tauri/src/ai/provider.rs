@@ -130,46 +130,34 @@ where
     }
 
     let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
+    let mut buffer: Vec<u8> = Vec::new();
     let mut full = String::new();
+    let mut done = false;
 
     while let Some(chunk) = stream.next().await {
         if cancel.load(Ordering::Relaxed) {
             return Err(AppError::Message("已取消".into()));
         }
         let bytes = chunk.map_err(net_error)?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        buffer.extend_from_slice(&bytes);
 
-        while let Some(pos) = buffer.find('\n') {
-            let line: String = buffer.drain(..=pos).collect();
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            let Ok(value) = serde_json::from_str::<Value>(line) else {
-                continue;
-            };
-            if let Some(err) = value.get("error").and_then(|e| e.as_str()) {
-                return Err(AppError::Message(format!("AI 服务返回错误：{err}")));
-            }
-            if let Some(content) = value
-                .get("message")
-                .and_then(|m| m.get("content"))
-                .and_then(|c| c.as_str())
-            {
-                if !content.is_empty() {
-                    full.push_str(content);
-                    on_delta(content);
-                }
-            }
-            if value
-                .get("done")
-                .and_then(|d| d.as_bool())
-                .unwrap_or(false)
-            {
+        while let Some(pos) = buffer.iter().position(|byte| *byte == b'\n') {
+            let line_bytes: Vec<u8> = buffer.drain(..=pos).collect();
+            let line = String::from_utf8_lossy(&line_bytes);
+            if handle_ollama_line(&line, &mut full, on_delta)? {
+                done = true;
                 break;
             }
         }
+        if done {
+            break;
+        }
+    }
+
+    // 流结束时可能还有最后一行没有换行符
+    if !done && !buffer.is_empty() {
+        let line = String::from_utf8_lossy(&buffer);
+        let _ = handle_ollama_line(&line, &mut full, on_delta)?;
     }
 
     if full.trim().is_empty() {
@@ -215,50 +203,33 @@ where
     }
 
     let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
+    let mut buffer: Vec<u8> = Vec::new();
     let mut full = String::new();
+    let mut done = false;
 
     while let Some(chunk) = stream.next().await {
         if cancel.load(Ordering::Relaxed) {
             return Err(AppError::Message("已取消".into()));
         }
         let bytes = chunk.map_err(net_error)?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        buffer.extend_from_slice(&bytes);
 
-        while let Some(pos) = buffer.find('\n') {
-            let line: String = buffer.drain(..=pos).collect();
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            let Some(data) = line.strip_prefix("data:") else {
-                continue;
-            };
-            let data = data.trim();
-            if data == "[DONE]" {
+        while let Some(pos) = buffer.iter().position(|byte| *byte == b'\n') {
+            let line_bytes: Vec<u8> = buffer.drain(..=pos).collect();
+            let line = String::from_utf8_lossy(&line_bytes);
+            if handle_openai_line(&line, &mut full, on_delta)? {
+                done = true;
                 break;
             }
-            let Ok(value) = serde_json::from_str::<Value>(data) else {
-                continue;
-            };
-            if let Some(err) = value.get("error") {
-                let message = err
-                    .get("message")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("未知错误");
-                return Err(AppError::Message(format!("AI 服务返回错误：{message}")));
-            }
-            let choice = &value["choices"][0];
-            let content = choice["delta"]["content"]
-                .as_str()
-                .or_else(|| choice["message"]["content"].as_str());
-            if let Some(content) = content {
-                if !content.is_empty() {
-                    full.push_str(content);
-                    on_delta(content);
-                }
-            }
         }
+        if done {
+            break;
+        }
+    }
+
+    if !done && !buffer.is_empty() {
+        let line = String::from_utf8_lossy(&buffer);
+        let _ = handle_openai_line(&line, &mut full, on_delta)?;
     }
 
     if full.trim().is_empty() {
@@ -267,6 +238,82 @@ where
         ));
     }
     Ok(full)
+}
+
+fn handle_ollama_line<F>(
+    line: &str,
+    full: &mut String,
+    on_delta: &mut F,
+) -> Result<bool>
+where
+    F: FnMut(&str) + Send,
+{
+    let line = line.trim();
+    if line.is_empty() {
+        return Ok(false);
+    }
+    let Ok(value) = serde_json::from_str::<Value>(line) else {
+        return Ok(false);
+    };
+    if let Some(err) = value.get("error").and_then(|e| e.as_str()) {
+        return Err(AppError::Message(format!("AI 服务返回错误：{err}")));
+    }
+    if let Some(content) = value
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+    {
+        if !content.is_empty() {
+            full.push_str(content);
+            on_delta(content);
+        }
+    }
+    Ok(value
+        .get("done")
+        .and_then(|d| d.as_bool())
+        .unwrap_or(false))
+}
+
+fn handle_openai_line<F>(
+    line: &str,
+    full: &mut String,
+    on_delta: &mut F,
+) -> Result<bool>
+where
+    F: FnMut(&str) + Send,
+{
+    let line = line.trim();
+    if line.is_empty() {
+        return Ok(false);
+    }
+    let Some(data) = line.strip_prefix("data:") else {
+        return Ok(false);
+    };
+    let data = data.trim();
+    if data == "[DONE]" {
+        return Ok(true);
+    }
+    let Ok(value) = serde_json::from_str::<Value>(data) else {
+        return Ok(false);
+    };
+    if let Some(err) = value.get("error") {
+        let message = err
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("未知错误");
+        return Err(AppError::Message(format!("AI 服务返回错误：{message}")));
+    }
+    let choice = &value["choices"][0];
+    let content = choice["delta"]["content"]
+        .as_str()
+        .or_else(|| choice["message"]["content"].as_str());
+    if let Some(content) = content {
+        if !content.is_empty() {
+            full.push_str(content);
+            on_delta(content);
+        }
+    }
+    Ok(false)
 }
 
 pub async fn list_models(
@@ -445,5 +492,106 @@ mod tests {
 
         assert_eq!(out, "hello");
         assert_eq!(deltas, "hello");
+    }
+}
+
+#[cfg(test)]
+mod utf8_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+    use std::time::Duration;
+
+    fn serve_split(
+        body: &'static [u8],
+        split_at: usize,
+        content_type: &'static str,
+    ) -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 8192];
+                let _ = stream.read(&mut buffer);
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    content_type,
+                    body.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&body[..split_at]);
+                let _ = stream.flush();
+                thread::sleep(Duration::from_millis(120));
+                let _ = stream.write_all(&body[split_at..]);
+                let _ = stream.flush();
+            }
+        });
+        port
+    }
+
+    fn provider(kind: AiProviderKind, base_url: String) -> AiProviderConfig {
+        AiProviderConfig {
+            id: "test".into(),
+            name: "test".into(),
+            kind,
+            base_url,
+            model: "mock-model".into(),
+        }
+    }
+
+    fn messages() -> Vec<ChatMessage> {
+        vec![ChatMessage::user("test".into())]
+    }
+
+    #[tokio::test]
+    async fn keeps_utf8_when_ollama_chunk_splits_multibyte() {
+        let body: &'static str = Box::leak(
+            "{\"message\":{\"content\":\"中文测试\"},\"done\":true}\n"
+                .to_string()
+                .into_boxed_str(),
+        );
+        let split = body.find("中").unwrap() + 1;
+        let port = serve_split(body.as_bytes(), split, "application/x-ndjson");
+        let p = provider(AiProviderKind::Ollama, format!("http://127.0.0.1:{port}"));
+
+        let out = chat_stream_with(
+            &p,
+            None,
+            &messages(),
+            Arc::new(AtomicBool::new(false)),
+            |_| {},
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(out, "中文测试");
+    }
+
+    #[tokio::test]
+    async fn keeps_utf8_when_openai_chunk_splits_multibyte() {
+        let body: &'static str = Box::leak(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"中文测试\"}}]}\n\ndata: [DONE]\n\n"
+                .to_string()
+                .into_boxed_str(),
+        );
+        let split = body.find("中").unwrap() + 1;
+        let port = serve_split(body.as_bytes(), split, "text/event-stream");
+        let p = provider(
+            AiProviderKind::OpenAi,
+            format!("http://127.0.0.1:{port}/v1"),
+        );
+
+        let out = chat_stream_with(
+            &p,
+            Some("key"),
+            &messages(),
+            Arc::new(AtomicBool::new(false)),
+            |_| {},
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(out, "中文测试");
     }
 }
