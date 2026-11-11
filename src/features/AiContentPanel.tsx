@@ -6,7 +6,7 @@ import {
   RefreshCw,
   Sparkles,
   Square,
-  X,
+  Trash2,
 } from "lucide-react";
 
 import type { AiMapResultEntry } from "../lib/types";
@@ -147,7 +147,7 @@ export function AiContentPanel() {
         </div>
       </div>
 
-      {(generating || streamText) && (
+      {generating && (
         <div className="ai-stream">
           <div className="ai-stream-head">
             <Loader className="spin" />
@@ -177,7 +177,7 @@ export function AiContentPanel() {
             <span className="hint">
               {contentResult.entries.length} 个文件
             </span>
-            {applied && <Check className="ai-ok" />}
+            <Check className="ai-ok" />
           </div>
 
           <div className="ai-summary">{contentResult.summary}</div>
@@ -245,20 +245,26 @@ export function AiContentPanel() {
           )}
 
           <div className="ai-actions">
-            <button className="btn primary" onClick={applyContent}>
+            <button
+              className="btn primary ai-action-main"
+              onClick={applyContent}
+            >
               <Check />
               应用到预览
             </button>
             <button
-              className="btn"
+              className="btn ai-action-wide"
               disabled={generating || !contentDraft.trim()}
               onClick={() => void generateContent(contentDraft)}
             >
               <RefreshCw />
               重新生成
             </button>
-            <button className="btn ghost" onClick={() => clearContent()}>
-              <X />
+            <button
+              className="btn ai-action-remove"
+              onClick={() => clearContent()}
+            >
+              <Trash2 />
               移除方案
             </button>
           </div>

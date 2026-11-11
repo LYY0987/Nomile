@@ -1839,3 +1839,55 @@ mark {
   color: var(--text-faint);
   font-size: 11px;
 }
+
+.ai-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.ai-actions .btn {
+  min-width: 0;
+  justify-content: center;
+}
+.ai-action-main,
+.ai-action-wide {
+  grid-column: 1 / -1;
+}
+.ai-action-remove {
+  grid-column: 1 / -1;
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+.ai-action-remove:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.ai-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.ai-actions .btn {
+  min-width: 0;
+  justify-content: center;
+}
+.ai-action-main,
+.ai-action-wide {
+  grid-column: 1 / -1;
+}
+.ai-action-remove {
+  grid-column: 1 / -1;
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+.ai-action-remove:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}

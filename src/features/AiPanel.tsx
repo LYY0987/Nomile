@@ -9,7 +9,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Square,
-  X,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -238,7 +238,7 @@ export function AiPanel() {
           </div>
         </div>
 
-        {(generating || streamText) && (
+        {generating && (
           <div className="ai-stream">
             <div className="ai-stream-head">
               <Loader className="spin" />
@@ -263,7 +263,7 @@ export function AiPanel() {
             <div className="ai-result-head">
               <span className="ai-badge">{applied ? "已应用" : "方案已生成"}</span>
               <div className="spacer" />
-              {applied && <Check className="ai-ok" />}
+              <Check className="ai-ok" />
             </div>
 
             <div className="ai-summary">{result.summary}</div>
@@ -316,7 +316,7 @@ export function AiPanel() {
             )}
 
             <div className="ai-actions">
-              <button className="btn primary" onClick={apply}>
+              <button className="btn primary ai-action-main" onClick={apply}>
                 <Check />
                 应用到预览
               </button>
@@ -351,8 +351,11 @@ export function AiPanel() {
               >
                 加入规则栈
               </button>
-              <button className="btn ghost" onClick={() => clearResult()}>
-                <X />
+              <button
+                className="btn ai-action-remove"
+                onClick={() => clearResult()}
+              >
+                <Trash2 />
                 移除方案
               </button>
             </div>
