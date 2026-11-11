@@ -1351,18 +1351,26 @@ mark {
   align-items: center;
   gap: 6px;
 }
-.ai-provider {
-  max-width: 150px;
-  overflow: hidden;
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ai-generate-row .btn {
+  flex: none;
 }
-.ai-provider:hover {
-  color: var(--accent);
+.ai-provider-select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 11px;
+  outline: none;
+}
+.ai-provider-select:focus {
+  border-color: var(--accent);
+}
+.ai-provider-select:disabled {
+  opacity: 0.6;
 }
 
 .ai-stream {

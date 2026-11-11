@@ -19,6 +19,7 @@ import { useAi } from "../store/aiStore";
 import { useApp } from "../store/appStore";
 import { segmentLabel, transformLabel } from "./aiSpecLabels";
 import { AiContentPanel } from "./AiContentPanel";
+import { AiProviderSelect } from "./AiProviderSelect";
 import { AiSettings } from "./AiSettings";
 import { AiSpecEditor } from "./AiSpecEditor";
 import { ModeSwitch } from "./ModeSwitch";
@@ -54,7 +55,6 @@ export function AiPanel() {
   const notify = useApp((s) => s.notify);
 
   const providers = useAi((s) => s.providers);
-  const activeId = useAi((s) => s.activeId);
   const generating = useAi((s) => s.generating);
   const status = useAi((s) => s.status);
   const streamText = useAi((s) => s.streamText);
@@ -82,9 +82,12 @@ export function AiPanel() {
     void loadProviders();
   }, [loadProviders]);
 
-  const active = providers.find((p) => p.id === activeId);
   const applied = !!result && aiSpec === result.spec;
-  const canGenerate = !!sessionId && draft.trim().length > 0 && !generating;
+  const canGenerate =
+    !!sessionId &&
+    providers.length > 0 &&
+    draft.trim().length > 0 &&
+    !generating;
   const aiPresets = presets.filter((preset) =>
     preset.rules.some((rule) => rule.rule.kind === "ai")
   );
@@ -212,6 +215,7 @@ export function AiPanel() {
             ))}
           </div>
           <div className="ai-generate-row">
+            <AiProviderSelect disabled={generating} />
             <button
               className="btn primary"
               disabled={!canGenerate}
@@ -226,16 +230,6 @@ export function AiPanel() {
                 停止
               </button>
             )}
-            <div className="spacer" />
-            <button
-              className="ai-provider"
-              title="切换 AI 服务"
-              onClick={() => setSettingsOpen(true)}
-            >
-              {active
-                ? `${active.name}${active.model ? ` · ${active.model}` : " · 未选模型"}`
-                : "未配置服务"}
-            </button>
           </div>
         </div>
 

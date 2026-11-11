@@ -12,6 +12,7 @@ import {
 import type { AiMapResultEntry } from "../lib/types";
 import { useAi } from "../store/aiStore";
 import { useApp } from "../store/appStore";
+import { AiProviderSelect } from "./AiProviderSelect";
 
 const EXAMPLES = [
   "按文档主题起一个简洁的标题",
@@ -39,7 +40,6 @@ export function AiContentPanel() {
   const aiMap = useApp((s) => s.aiMap);
 
   const providers = useAi((s) => s.providers);
-  const activeId = useAi((s) => s.activeId);
   const contentDraft = useAi((s) => s.contentDraft);
   const setContentDraft = useAi((s) => s.setContentDraft);
   const allowContent = useAi((s) => s.allowContent);
@@ -55,9 +55,9 @@ export function AiContentPanel() {
   const updateContentEntry = useAi((s) => s.updateContentEntry);
   const clearContent = useAi((s) => s.clearContent);
 
-  const active = providers.find((p) => p.id === activeId);
   const canGenerate =
     !!sessionId &&
+    providers.length > 0 &&
     contentDraft.trim().length > 0 &&
     allowContent &&
     !generating;
@@ -124,6 +124,7 @@ export function AiContentPanel() {
         </div>
 
         <div className="ai-generate-row">
+          <AiProviderSelect disabled={generating} />
           <button
             className="btn primary"
             disabled={!canGenerate}
@@ -138,12 +139,6 @@ export function AiContentPanel() {
               停止
             </button>
           )}
-          <div className="spacer" />
-          <span className="ai-provider">
-            {active
-              ? `${active.name}${active.model ? ` · ${active.model}` : " · 未选模型"}`
-              : "未配置服务"}
-          </span>
         </div>
       </div>
 
