@@ -564,14 +564,14 @@ export const useApp = create<AppState>((set, get) => ({
       const undoable = res.state !== "interrupted" && res.renamed > 0;
 
       if (undoable) {
-        const secs = 12;
+        const secs = 5;
         get().showToast({
           kind: failedCount > 0 ? "info" : "ok",
           text:
             (failedCount > 0
               ? `已重命名 ${res.renamed} 项，${failedCount} 项失败`
-              : `已重命名 ${res.renamed} 项`) +
-            ` · ${secs} 秒内可点「撤销」直接还原，提示关闭后请到「历史记录」撤销`,
+              : `已成功重命名 ${res.renamed} 项`) +
+            ` · ${secs} 秒内可点「撤销」，之后可在「历史记录」中撤销`,
           actionLabel: "撤销",
           action: () => {
             get().clearToast();
@@ -579,8 +579,6 @@ export const useApp = create<AppState>((set, get) => ({
           },
           seconds: secs,
         });
-        // 顺手把历史记录打开，让这一条立刻可见
-        void get().toggleHistory(true);
       } else {
         get().notify(
           failedCount > 0

@@ -968,16 +968,17 @@ mark {
   gap: 4px;
   height: 23px;
   padding: 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  border: 1px solid transparent;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: #f0a020;
+  color: #2b1a00;
   font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
 .toast-action:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: #ffb43a;
 }
 .toast-action svg {
   width: 13px;
