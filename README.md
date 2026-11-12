@@ -6,8 +6,6 @@
 
 **Nomile** 取自拉丁语 *nomen*（名字）与 *file*，意思就是「给文件命名」。
 
-Windows 上的批量重命名工具。
-
 ![Nomile 主界面](assets/screenshot.png)
 
 ## 特性
