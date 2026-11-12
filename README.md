@@ -4,9 +4,9 @@
   <h1>Nomile</h1>
 </div>
 
-**Nomile** 取自拉丁语 *nomen*（名字）与 *file*，字面意思就是「给文件命名」。
+**Nomile** 取自拉丁语 *nomen*（名字）与 *file*，意思就是「给文件命名」。
 
-它是一款 Windows 桌面端的批量重命名工具。规则只在 Rust 里算一次，预览和执行调的是同一个 `build_plan`，所以列表里看到的名字，就是最终落地的名字。
+Windows 上的批量重命名工具。
 
 ![Nomile 主界面](assets/screenshot.png)
 
