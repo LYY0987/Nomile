@@ -1,8 +1,8 @@
 <div align="center">
   <img src="src-tauri/icons/128x128.png" width="88" alt="Nomile" />
-</div>
 
-# Nomile
+  <h1>Nomile</h1>
+</div>
 
 Windows 桌面端的批量重命名工具。规则只在 Rust 里算一次，预览和执行调的是同一个 `build_plan`，所以列表里看到的名字，就是最终落地的名字。
 
